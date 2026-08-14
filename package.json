@@ -4,6 +4,14 @@
   "description": "Minimal, student-focused, strictly read-only MCP server for Canvas LMS",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/javohir73/mcp-server-canvas-lms.git"
+  },
+  "homepage": "https://github.com/javohir73/mcp-server-canvas-lms#readme",
+  "bugs": {
+    "url": "https://github.com/javohir73/mcp-server-canvas-lms/issues"
+  },
   "bin": {
     "mcp-server-canvas-lms": "bin/mcp-server-canvas-lms.js"
   },
