@@ -40,10 +40,13 @@ Then restart or reconnect the client and try this first connection check:
 
 > List my active Canvas courses.
 
-See the exact setup for [Codex](docs/clients/codex.md),
-[Claude Desktop](docs/clients/claude-desktop.md),
-[Cursor](docs/clients/cursor.md), [VS Code](docs/clients/vscode.md), or a
-[generic stdio client](docs/clients/generic.md).
+See the exact setup for
+[Codex](https://github.com/javohir73/mcp-server-canvas-lms/blob/main/docs/clients/codex.md),
+[Claude Desktop](https://github.com/javohir73/mcp-server-canvas-lms/blob/main/docs/clients/claude-desktop.md),
+[Cursor](https://github.com/javohir73/mcp-server-canvas-lms/blob/main/docs/clients/cursor.md),
+[VS Code](https://github.com/javohir73/mcp-server-canvas-lms/blob/main/docs/clients/vscode.md),
+or a
+[generic stdio client](https://github.com/javohir73/mcp-server-canvas-lms/blob/main/docs/clients/generic.md).
 
 ## Tools
 

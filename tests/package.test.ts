@@ -113,6 +113,28 @@ test('packed package clean-installs with only public runtime files and starts al
       url: 'https://github.com/javohir73/mcp-server-canvas-lms/issues',
     });
 
+    const installedReadme = await readFile(
+      join(
+        smokeDirectory,
+        'node_modules',
+        'mcp-server-canvas-lms',
+        'README.md',
+      ),
+      'utf8',
+    );
+    expect(installedReadme).not.toMatch(/\]\(docs\/clients\//);
+    for (const guide of [
+      'codex.md',
+      'claude-desktop.md',
+      'cursor.md',
+      'vscode.md',
+      'generic.md',
+    ]) {
+      expect(installedReadme).toContain(
+        `https://github.com/javohir73/mcp-server-canvas-lms/blob/main/docs/clients/${guide}`,
+      );
+    }
+
     const transport = new StdioClientTransport({
       command: join(
         smokeDirectory,
