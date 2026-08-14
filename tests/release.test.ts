@@ -8,6 +8,18 @@ async function readWorkflow(name: string): Promise<string> {
   return readFile(resolve(projectRoot, '.github', 'workflows', name), 'utf8');
 }
 
+function expectCommandsInOrder(workflow: string, commands: readonly string[]) {
+  let previousIndex = -1;
+  for (const command of commands) {
+    const index = workflow.indexOf(`run: ${command}`);
+    expect(
+      index,
+      `${command} must be present after the previous command`,
+    ).toBeGreaterThan(previousIndex);
+    previousIndex = index;
+  }
+}
+
 describe('GitHub Actions release policy', () => {
   test('package metadata defaults public publishes to provenance', async () => {
     const packageJson = JSON.parse(
@@ -33,16 +45,14 @@ describe('GitHub Actions release policy', () => {
   test('CI runs the complete verification suite', async () => {
     const workflow = await readWorkflow('ci.yml');
 
-    for (const command of [
+    expectCommandsInOrder(workflow, [
       'npm ci',
       'npm run lint',
       'npm run typecheck',
       'npm test',
       'npm run build',
       'npm pack --dry-run',
-    ]) {
-      expect(workflow).toContain(`run: ${command}`);
-    }
+    ]);
   });
 
   test('release is tag-only, least-privileged, fully verified, and provenance-enabled', async () => {
@@ -59,7 +69,7 @@ describe('GitHub Actions release policy', () => {
       `run: node -e "const p=require('./package.json'); const tag=process.env.GITHUB_REF_NAME; if (tag !== 'v'+p.version) process.exit(1)"`,
     );
 
-    for (const command of [
+    expectCommandsInOrder(workflow, [
       'npm ci',
       'npm run lint',
       'npm run typecheck',
@@ -68,9 +78,23 @@ describe('GitHub Actions release policy', () => {
       'npm pack --dry-run',
       'npm audit --omit=dev',
       'npm publish --provenance --access public',
-    ]) {
-      expect(workflow).toContain(`run: ${command}`);
-    }
+    ]);
+  });
+
+  test('creates generated GitHub release notes only after npm publishing succeeds', async () => {
+    const workflow = await readWorkflow('release.yml');
+
+    expect(workflow).toMatch(/release:\s*\n\s+name: Create GitHub Release/);
+    expect(workflow).toMatch(/release:[\s\S]*?needs: publish/);
+    expect(workflow).toMatch(
+      /release:[\s\S]*?permissions:\s*\n\s+contents: write/,
+    );
+    expect(workflow).toMatch(
+      /release:[\s\S]*?GH_TOKEN: \$\{\{ github\.token \}\}/,
+    );
+    expect(workflow).toContain(
+      'run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes',
+    );
   });
 
   test('all actions use immutable commits with version comments', async () => {

@@ -21,8 +21,11 @@ Use Node.js 20.19 or newer and install dependencies with `npm ci`. Before
 opening a pull request, run:
 
 ```sh
-npm run lint && npm run typecheck && npm test
+npm run lint && npm run typecheck && npm test && npm run build && npm pack --dry-run
 ```
+
+The package smoke test builds the distributable before packing it, so this
+sequence also works in a fresh checkout where `dist/` does not exist yet.
 
 Describe the user-visible change, tests performed, and any security impact in
 the pull request. By contributing, you agree that your contribution is

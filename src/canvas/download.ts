@@ -76,11 +76,21 @@ interface ExternalTarget {
 }
 
 interface TrackedDirectory {
-  readonly cleanupAtExit: () => void;
   readonly removeDirectory: DirectoryRemover;
 }
 
 const trackedDirectories = new Map<string, TrackedDirectory>();
+
+function cleanupTrackedDirectoriesAtExit(): void {
+  for (const directory of trackedDirectories.keys()) {
+    try {
+      rmSync(directory, { recursive: true, force: true });
+      trackedDirectories.delete(directory);
+    } catch {
+      // Process exit cannot await a retry; never leak filesystem details.
+    }
+  }
+}
 
 export async function downloadCanvasFile(
   file: CanvasFile,
@@ -581,16 +591,11 @@ function trackDirectory(
   removeDirectory: DirectoryRemover,
 ): void {
   if (trackedDirectories.has(directory)) return;
-  const cleanupAtExit = () => {
-    try {
-      rmSync(directory, { recursive: true, force: true });
-      trackedDirectories.delete(directory);
-    } catch {
-      // Process exit cannot await a retry; never leak filesystem details.
-    }
-  };
-  trackedDirectories.set(directory, { cleanupAtExit, removeDirectory });
-  process.once('exit', cleanupAtExit);
+  const installExitListener = trackedDirectories.size === 0;
+  trackedDirectories.set(directory, { removeDirectory });
+  if (installExitListener) {
+    process.once('exit', cleanupTrackedDirectoriesAtExit);
+  }
 }
 
 async function removeTrackedDirectory(directory: string): Promise<void> {
@@ -598,7 +603,9 @@ async function removeTrackedDirectory(directory: string): Promise<void> {
   if (!tracked) return;
   await tracked.removeDirectory(directory);
   trackedDirectories.delete(directory);
-  process.removeListener('exit', tracked.cleanupAtExit);
+  if (trackedDirectories.size === 0) {
+    process.removeListener('exit', cleanupTrackedDirectoriesAtExit);
+  }
 }
 
 function defaultRemoveDirectory(directory: string): Promise<void> {

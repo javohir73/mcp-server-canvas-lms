@@ -30,3 +30,15 @@ jobs:
       - run: npm pack --dry-run
       - run: npm audit --omit=dev
       - run: npm publish --provenance --access public
+
+  release:
+    name: Create GitHub Release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Publish generated release notes
+        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes

@@ -783,6 +783,27 @@ describe('file handlers', () => {
     expect(process.listenerCount('exit')).toBe(initialExitListeners);
   });
 
+  it('uses one exit listener while more than ten downloads are tracked', async () => {
+    const initialExitListeners = process.listenerCount('exit');
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockImplementation(async () => new Response(new Uint8Array([1])));
+
+    for (let index = 0; index < 12; index += 1) {
+      const result = await downloadCanvasFile(
+        binaryFile({ id: index + 1 }),
+        downloadOptions(fetchImpl),
+      );
+      if (result.kind !== 'downloaded') throw new Error('Expected download');
+    }
+
+    expect(process.listenerCount('exit')).toBe(initialExitListeners + 1);
+
+    await cleanupDownloads();
+
+    expect(process.listenerCount('exit')).toBe(initialExitListeners);
+  });
+
   it.each(['unsafe name', 'wrong parent', 'non-directory', 'symlink'])(
     'removes a factory-created %s after temporary-directory validation fails',
     async (kind) => {

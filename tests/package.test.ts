@@ -44,6 +44,11 @@ test('packed package clean-installs with only public runtime files and starts al
   let client: Client | undefined;
 
   try {
+    await execFileAsync('npm', ['run', 'build'], {
+      cwd: projectRoot,
+      env: { ...process.env, npm_config_dry_run: 'false' },
+    });
+
     const { stdout } = await execFileAsync(
       'npm',
       ['pack', '--json', '--ignore-scripts'],
