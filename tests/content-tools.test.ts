@@ -183,11 +183,44 @@ describe('content handlers', () => {
     );
     expect(text).toContain('Type: Page');
     expect(text).toContain('Completion requirement: must_view');
+    expect(text).toContain('Minimum score: 0');
+    expect(text).toContain('Completed: yes');
+    expect(text).toContain('Completed: no');
+    const welcomeItem = text.slice(
+      text.indexOf('Item: Welcome'),
+      text.indexOf('Item: Safety handbook'),
+    );
+    expect(welcomeItem).not.toContain('Minimum score:');
+    expect(welcomeItem).not.toContain('Completed:');
     expect(text).toContain('Locked: yes');
     expect(text).toContain('Complete the orientation first.');
     expect(text).toContain(
       'Canvas: https://canvas.example.edu/courses/101/pages/trail-map',
     );
+  });
+
+  it('rejects a present non-array items value without requesting a fallback', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse([
+          {
+            id: 703,
+            name: 'Malformed module',
+            position: 1,
+            items: null,
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(jsonResponse(fallbackModuleItems));
+
+    await expect(
+      createHandlers(fetchMock).listModules({ course_id: 101 }),
+    ).rejects.toMatchObject({
+      code: 'BAD_RESPONSE',
+      message: 'Canvas returned invalid module items',
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('returns the modules empty state', async () => {

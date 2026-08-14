@@ -32,7 +32,11 @@ export const contentModules = [
         title: 'Trail journal',
         position: 2,
         html_url: 'https://canvas.example.edu/courses/101/assignments/801',
-        completion_requirement: { type: 'must_submit' },
+        completion_requirement: {
+          type: 'must_submit',
+          min_score: 0,
+          completed: false,
+        },
       },
       {
         id: 802,
@@ -41,7 +45,7 @@ export const contentModules = [
         title: 'Locked trail map',
         position: 1,
         html_url: 'https://canvas.example.edu/courses/101/pages/trail-map',
-        completion_requirement: { type: 'must_view' },
+        completion_requirement: { type: 'must_view', completed: true },
         content_details: {
           locked_for_user: true,
           lock_explanation: 'Complete the orientation first.',

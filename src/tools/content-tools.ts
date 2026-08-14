@@ -5,6 +5,7 @@ import type {
   CanvasModuleItem,
   CanvasPage,
 } from '../canvas/types.js';
+import { CanvasError } from '../canvas/errors.js';
 import { htmlToReadableText } from '../format/html.js';
 import { formatTimestamp, textResult } from '../format/text.js';
 import type { Handler, ToolDependencies } from './types.js';
@@ -85,12 +86,7 @@ export function createContentHandlers(
       const records: ModuleRecord[] = [];
 
       for (const module of modules) {
-        const items =
-          module.items ??
-          (await client.getAll<CanvasModuleItem>(
-            `/courses/${String(course_id)}/modules/${String(module.id)}/items`,
-            MODULE_ITEM_QUERY,
-          ));
+        const items = await getModuleItems(client, course_id, module);
         records.push({ module, items });
       }
 
@@ -106,6 +102,32 @@ export function createContentHandlers(
       return textResult(formatPage(page, course_id, timezone));
     },
   };
+}
+
+async function getModuleItems(
+  client: ToolDependencies['client'],
+  courseId: number,
+  module: CanvasModule,
+): Promise<readonly CanvasModuleItem[]> {
+  if (!Object.prototype.hasOwnProperty.call(module, 'items')) {
+    return client.getAll<CanvasModuleItem>(
+      `/courses/${String(courseId)}/modules/${String(module.id)}/items`,
+      MODULE_ITEM_QUERY,
+    );
+  }
+  if (!isModuleItemArray(module.items)) {
+    throw new CanvasError(
+      'BAD_RESPONSE',
+      'Canvas returned invalid module items',
+    );
+  }
+  return module.items;
+}
+
+function isModuleItemArray(
+  value: unknown,
+): value is readonly CanvasModuleItem[] {
+  return Array.isArray(value);
 }
 
 function validateAnnouncementInput(input: {
@@ -249,12 +271,26 @@ function formatModuleItem(item: CanvasModuleItem): string {
     `Type: ${item.type ?? 'not provided'}`,
     `Position: ${formatOptionalNumber(item.position)}`,
     `Completion requirement: ${item.completion_requirement?.type ?? 'not required'}`,
+    ...formatCompletionDetails(item),
     `Locked: ${locked ? 'yes' : 'no'}`,
     ...(lockExplanation
       ? [`Lock details: ${htmlToReadableText(lockExplanation)}`]
       : []),
     ...(item.html_url ? [`Canvas: ${item.html_url}`] : []),
   ].join('\n');
+}
+
+function formatCompletionDetails(item: CanvasModuleItem): string[] {
+  const requirement = item.completion_requirement;
+  if (!requirement) return [];
+  return [
+    ...(requirement.min_score === null || requirement.min_score === undefined
+      ? []
+      : [`Minimum score: ${String(requirement.min_score)}`]),
+    ...(requirement.completed === undefined
+      ? []
+      : [`Completed: ${requirement.completed ? 'yes' : 'no'}`]),
+  ];
 }
 
 function formatPage(
