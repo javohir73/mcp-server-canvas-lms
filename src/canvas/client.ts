@@ -48,7 +48,13 @@ export class CanvasClient {
   }
 
   private buildApiUrl(path: CanvasPath, query: CanvasQuery): URL {
+    if (path.includes('?') || path.includes('#')) {
+      throw new CanvasError('UNSAFE_URL', 'Canvas API path is unsafe');
+    }
     const url = new URL(`/api/v1${path}`, this.config.baseUrl);
+    if (url.pathname !== '/api/v1' && !url.pathname.startsWith('/api/v1/')) {
+      throw new CanvasError('UNSAFE_URL', 'Canvas API path is unsafe');
+    }
     for (const [key, value] of Object.entries(query)) {
       if (value === undefined) continue;
       if (Array.isArray(value)) {

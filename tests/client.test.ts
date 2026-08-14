@@ -58,6 +58,23 @@ describe('CanvasClient', () => {
     );
   });
 
+  it.each([
+    ['dot-segment escape', '/../../login'],
+    ['embedded query', '/courses?include=secrets'],
+    ['fragment', '/courses#fragment'],
+  ] as const)('rejects a path containing a %s', async (_case, path) => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(jsonResponse({ id: 1 }));
+    const client = new CanvasClient(config, fetchMock);
+
+    const error = await captureError(() => client.get(path));
+
+    expect(error.code).toBe('UNSAFE_URL');
+    expect(error.message).toBe('Canvas API path is unsafe');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('follows a same-origin next link and combines both pages', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
