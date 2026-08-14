@@ -1,8 +1,11 @@
 import { lstat, mkdtemp, open, realpath, rm } from 'node:fs/promises';
 import { rmSync } from 'node:fs';
-import { isIP } from 'node:net';
+import { lookup as dnsLookup } from 'node:dns/promises';
+import { request as httpsRequest } from 'node:https';
+import { BlockList, isIP, type LookupFunction } from 'node:net';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
+import { Readable } from 'node:stream';
 import type { CanvasFile } from './types.js';
 import { CanvasError } from './errors.js';
 import { htmlToReadableText } from '../format/html.js';
@@ -23,6 +26,29 @@ export type DownloadedFile = {
 };
 
 export type TemporaryDirectoryFactory = (prefix: string) => Promise<string>;
+export type DirectoryRemover = (directory: string) => Promise<void>;
+
+export interface ResolvedAddress {
+  readonly address: string;
+  readonly family: 4 | 6;
+}
+
+export type HostnameResolver = (
+  hostname: string,
+) => Promise<readonly ResolvedAddress[]>;
+
+export interface ExternalRequestOptions {
+  readonly method: 'GET';
+  readonly redirect: 'manual';
+  readonly headers: Readonly<Record<string, string>>;
+  readonly signal: AbortSignal;
+  readonly addresses: readonly ResolvedAddress[];
+}
+
+export type ExternalTransport = (
+  url: URL,
+  options: ExternalRequestOptions,
+) => Promise<Response>;
 
 export interface DownloadOptions {
   readonly canvasOrigin: URL;
@@ -30,6 +56,9 @@ export interface DownloadOptions {
   readonly fetchImpl?: typeof fetch;
   readonly createTempDirectory?: TemporaryDirectoryFactory;
   readonly timeoutMs?: number;
+  readonly resolveHostname?: HostnameResolver;
+  readonly externalTransport?: ExternalTransport;
+  readonly removeDirectory?: DirectoryRemover;
 }
 
 const INLINE_BYTE_LIMIT = 256 * 1024;
@@ -39,9 +68,16 @@ const MAX_REDIRECTS = 3;
 const DEFAULT_TIMEOUT_MS = 15_000;
 const TEMP_DIRECTORY_PREFIX = 'mcp-server-canvas-lms-';
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+const BLOCKED_ADDRESSES = createBlockedAddressList();
+
+interface ExternalTarget {
+  readonly hostname: string;
+  readonly addresses: readonly ResolvedAddress[];
+}
 
 interface TrackedDirectory {
   readonly cleanupAtExit: () => void;
+  readonly removeDirectory: DirectoryRemover;
 }
 
 const trackedDirectories = new Map<string, TrackedDirectory>();
@@ -72,36 +108,52 @@ export async function downloadCanvasFile(
         };
       }
 
-      directory = await createDownloadDirectory(options.createTempDirectory);
+      directory = await createDownloadDirectory(
+        options.createTempDirectory,
+        options.removeDirectory,
+      );
       const name = safeFilename(file);
       const path = join(directory, name);
       await writeBytes(path, bytes);
       return { kind: 'downloaded', name, mimeType, path, size: bytes.length };
     }
 
-    directory = await createDownloadDirectory(options.createTempDirectory);
+    directory = await createDownloadDirectory(
+      options.createTempDirectory,
+      options.removeDirectory,
+    );
     const name = safeFilename(file);
     const path = join(directory, name);
     const size = await streamResponseToFile(response, path);
     return { kind: 'downloaded', name, mimeType, path, size };
   } catch (error) {
-    if (directory) await removeTrackedDirectory(directory);
+    if (directory) {
+      try {
+        await removeTrackedDirectory(directory);
+      } catch {
+        // Keep the directory tracked for cleanupDownloads or process exit.
+      }
+    }
     if (error instanceof CanvasError) throw error;
     throw new CanvasError('NETWORK', 'Canvas file download failed');
   }
 }
 
 export async function cleanupDownloads(): Promise<void> {
-  const directories = [...trackedDirectories.entries()];
-  trackedDirectories.clear();
-  for (const [, tracked] of directories) {
-    process.removeListener('exit', tracked.cleanupAtExit);
+  let cleanupFailed = false;
+  for (const directory of [...trackedDirectories.keys()]) {
+    try {
+      await removeTrackedDirectory(directory);
+    } catch {
+      cleanupFailed = true;
+    }
   }
-  await Promise.all(
-    directories.map(([directory]) =>
-      rm(directory, { recursive: true, force: true }),
-    ),
-  );
+  if (cleanupFailed) {
+    throw new CanvasError(
+      'BAD_RESPONSE',
+      'Unable to clean up temporary Canvas downloads',
+    );
+  }
 }
 
 function initialDownloadUrl(file: CanvasFile, canvasOrigin: URL): URL {
@@ -135,22 +187,32 @@ async function fetchDownload(
 ): Promise<Response> {
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   let url = initialUrl;
-  let externalHostname: string | undefined;
+  let externalTarget: ExternalTarget | undefined;
   let redirectCount = 0;
 
   for (;;) {
     let response: Response;
     try {
       const headers: Record<string, string> = { Accept: '*/*' };
-      if (url.origin === options.canvasOrigin.origin) {
+      if (externalTarget === undefined) {
         headers.Authorization = `Bearer ${options.apiToken}`;
+        response = await fetchImpl(url.href, {
+          method: 'GET',
+          redirect: 'manual',
+          headers,
+          signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+        });
+      } else {
+        response = await (
+          options.externalTransport ?? defaultExternalTransport
+        )(url, {
+          method: 'GET',
+          redirect: 'manual',
+          headers,
+          signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+          addresses: externalTarget.addresses,
+        });
       }
-      response = await fetchImpl(url.href, {
-        method: 'GET',
-        redirect: 'manual',
-        headers,
-        signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_TIMEOUT_MS),
-      });
     } catch {
       throw new CanvasError('NETWORK', 'Canvas file download failed');
     }
@@ -173,18 +235,172 @@ async function fetchDownload(
     }
     redirectCount += 1;
     const redirected = redirectUrl(response.headers.get('location'), url);
+    await discardResponseBody(response);
 
-    if (externalHostname !== undefined) {
-      if (normalizedHostname(redirected) !== externalHostname) {
+    if (externalTarget !== undefined) {
+      if (normalizedHostname(redirected) !== externalTarget.hostname) {
         throw unsafeRedirectError();
       }
       assertSafeExternalUrl(redirected);
     } else if (redirected.origin !== options.canvasOrigin.origin) {
       assertSafeExternalUrl(redirected);
-      externalHostname = normalizedHostname(redirected);
+      const hostname = normalizedHostname(redirected);
+      externalTarget = {
+        hostname,
+        addresses: await resolveSafeAddresses(hostname, options),
+      };
     }
     url = redirected;
   }
+}
+
+async function resolveSafeAddresses(
+  hostname: string,
+  options: DownloadOptions,
+): Promise<readonly ResolvedAddress[]> {
+  let addresses: readonly ResolvedAddress[];
+  try {
+    addresses = await (options.resolveHostname ?? defaultResolveHostname)(
+      hostname,
+    );
+  } catch {
+    throw new CanvasError('NETWORK', 'Canvas file download failed');
+  }
+  if (
+    addresses.length === 0 ||
+    addresses.some(
+      ({ address, family }) =>
+        isIP(address) !== family ||
+        (family === 6 && address.toLowerCase().startsWith('::ffff:')) ||
+        BLOCKED_ADDRESSES.check(address, family === 4 ? 'ipv4' : 'ipv6'),
+    )
+  ) {
+    throw unsafeRedirectError();
+  }
+  return addresses.map(({ address, family }) => ({ address, family }));
+}
+
+async function defaultResolveHostname(
+  hostname: string,
+): Promise<readonly ResolvedAddress[]> {
+  const answers = await dnsLookup(hostname, { all: true, verbatim: true });
+  return answers.flatMap(({ address, family }) =>
+    family === 4 || family === 6 ? [{ address, family }] : [],
+  );
+}
+
+function defaultExternalTransport(
+  url: URL,
+  options: ExternalRequestOptions,
+): Promise<Response> {
+  return new Promise<Response>((resolveResponse, rejectResponse) => {
+    const request = httpsRequest(
+      url,
+      {
+        method: options.method,
+        headers: options.headers,
+        signal: options.signal,
+        lookup: restrictedLookup(options.addresses),
+        servername: normalizedHostname(url),
+        agent: false,
+      },
+      (incoming) => {
+        try {
+          const headers = new Headers();
+          for (let index = 0; index < incoming.rawHeaders.length; index += 2) {
+            const name = incoming.rawHeaders[index];
+            const value = incoming.rawHeaders[index + 1];
+            if (name !== undefined && value !== undefined) {
+              headers.append(name, value);
+            }
+          }
+          const status = incoming.statusCode ?? 500;
+          const body = responseStatusHasBody(status)
+            ? (Readable.toWeb(incoming) as ReadableStream<Uint8Array>)
+            : null;
+          resolveResponse(
+            new Response(body, {
+              status,
+              ...(incoming.statusMessage
+                ? { statusText: incoming.statusMessage }
+                : {}),
+              headers,
+            }),
+          );
+        } catch (error) {
+          incoming.destroy();
+          rejectResponse(
+            error instanceof Error
+              ? error
+              : new Error('HTTPS response construction failed'),
+          );
+        }
+      },
+    );
+    request.once('error', rejectResponse);
+    request.end();
+  });
+}
+
+function restrictedLookup(
+  addresses: readonly ResolvedAddress[],
+): LookupFunction {
+  return (_hostname, options, callback) => {
+    const family =
+      options.family === 4 || options.family === 6 ? options.family : undefined;
+    const eligible =
+      family === undefined
+        ? addresses
+        : addresses.filter((address) => address.family === family);
+    const selected = eligible[0];
+    if (!selected) {
+      const error = Object.assign(new Error('No screened address available'), {
+        code: 'ENOTFOUND',
+      });
+      callback(error, '', 0);
+      return;
+    }
+    if (options.all) {
+      callback(
+        null,
+        eligible.map(({ address, family: addressFamily }) => ({
+          address,
+          family: addressFamily,
+        })),
+      );
+      return;
+    }
+    callback(null, selected.address, selected.family);
+  };
+}
+
+function responseStatusHasBody(status: number): boolean {
+  return status !== 204 && status !== 205 && status !== 304;
+}
+
+async function discardResponseBody(response: Response): Promise<void> {
+  try {
+    await response.body?.cancel();
+  } catch {
+    // Redirect response bodies are not data-bearing and cancellation is best effort.
+  }
+}
+
+function createBlockedAddressList(): BlockList {
+  const blocked = new BlockList();
+  blocked.addSubnet('0.0.0.0', 8, 'ipv4');
+  blocked.addSubnet('10.0.0.0', 8, 'ipv4');
+  blocked.addSubnet('100.64.0.0', 10, 'ipv4');
+  blocked.addSubnet('127.0.0.0', 8, 'ipv4');
+  blocked.addSubnet('169.254.0.0', 16, 'ipv4');
+  blocked.addSubnet('172.16.0.0', 12, 'ipv4');
+  blocked.addSubnet('192.168.0.0', 16, 'ipv4');
+  blocked.addAddress('::', 'ipv6');
+  blocked.addAddress('::1', 'ipv6');
+  blocked.addSubnet('fc00::', 7, 'ipv6');
+  blocked.addSubnet('fe80::', 10, 'ipv6');
+  blocked.addSubnet('fec0::', 10, 'ipv6');
+  return blocked;
 }
 
 function redirectUrl(location: string | null, from: URL): URL {
@@ -317,23 +533,38 @@ async function readResponseBytes(response: Response): Promise<Uint8Array> {
 
 async function createDownloadDirectory(
   factory: TemporaryDirectoryFactory = (prefix) => mkdtemp(prefix),
+  removeDirectory: DirectoryRemover = defaultRemoveDirectory,
 ): Promise<string> {
   const prefix = join(tmpdir(), TEMP_DIRECTORY_PREFIX);
   const created = resolve(await factory(prefix));
-  const expectedParent = resolve(tmpdir());
-  if (
-    dirname(created) !== expectedParent ||
-    !basename(created).startsWith(TEMP_DIRECTORY_PREFIX)
-  ) {
-    throw new CanvasError(
-      'BAD_RESPONSE',
-      'Temporary download directory is outside the system temporary directory',
-    );
+  try {
+    await validateDownloadDirectory(created);
+  } catch {
+    trackDirectory(created, removeDirectory);
+    try {
+      await removeTrackedDirectory(created);
+    } catch {
+      // Retain tracking and the exit listener so cleanup can be retried.
+    }
+    throw temporaryDirectoryError();
   }
 
-  const info = await lstat(created);
+  trackDirectory(created, removeDirectory);
+  return created;
+}
+
+async function validateDownloadDirectory(directory: string): Promise<void> {
+  const expectedParent = resolve(tmpdir());
+  if (
+    dirname(directory) !== expectedParent ||
+    !basename(directory).startsWith(TEMP_DIRECTORY_PREFIX)
+  ) {
+    throw temporaryDirectoryError();
+  }
+
+  const info = await lstat(directory);
   const [realCreated, realTemporaryRoot] = await Promise.all([
-    realpath(created),
+    realpath(directory),
     realpath(expectedParent),
   ]);
   if (
@@ -341,33 +572,44 @@ async function createDownloadDirectory(
     info.isSymbolicLink() ||
     dirname(realCreated) !== realTemporaryRoot
   ) {
-    throw new CanvasError(
-      'BAD_RESPONSE',
-      'Temporary download directory is outside the system temporary directory',
-    );
+    throw temporaryDirectoryError();
   }
-
-  trackDirectory(created);
-  return created;
 }
 
-function trackDirectory(directory: string): void {
+function trackDirectory(
+  directory: string,
+  removeDirectory: DirectoryRemover,
+): void {
+  if (trackedDirectories.has(directory)) return;
   const cleanupAtExit = () => {
     try {
       rmSync(directory, { recursive: true, force: true });
-    } finally {
       trackedDirectories.delete(directory);
+    } catch {
+      // Process exit cannot await a retry; never leak filesystem details.
     }
   };
-  trackedDirectories.set(directory, { cleanupAtExit });
+  trackedDirectories.set(directory, { cleanupAtExit, removeDirectory });
   process.once('exit', cleanupAtExit);
 }
 
 async function removeTrackedDirectory(directory: string): Promise<void> {
   const tracked = trackedDirectories.get(directory);
-  if (tracked) process.removeListener('exit', tracked.cleanupAtExit);
+  if (!tracked) return;
+  await tracked.removeDirectory(directory);
   trackedDirectories.delete(directory);
-  await rm(directory, { recursive: true, force: true });
+  process.removeListener('exit', tracked.cleanupAtExit);
+}
+
+function defaultRemoveDirectory(directory: string): Promise<void> {
+  return rm(directory, { recursive: true, force: true });
+}
+
+function temporaryDirectoryError(): CanvasError {
+  return new CanvasError(
+    'BAD_RESPONSE',
+    'Temporary download directory is outside the system temporary directory',
+  );
 }
 
 async function writeBytes(path: string, bytes: Uint8Array): Promise<void> {

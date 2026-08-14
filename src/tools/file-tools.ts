@@ -2,6 +2,9 @@ import type { CanvasFile } from '../canvas/types.js';
 import { CanvasError } from '../canvas/errors.js';
 import {
   downloadCanvasFile,
+  type DirectoryRemover,
+  type ExternalTransport,
+  type HostnameResolver,
   type TemporaryDirectoryFactory,
 } from '../canvas/download.js';
 import { textResult } from '../format/text.js';
@@ -17,6 +20,9 @@ export interface FileToolDependencies extends ToolDependencies {
   readonly apiToken: string;
   readonly downloadFetch?: typeof fetch;
   readonly createTempDirectory?: TemporaryDirectoryFactory;
+  readonly resolveHostname?: HostnameResolver;
+  readonly externalTransport?: ExternalTransport;
+  readonly removeDirectory?: DirectoryRemover;
 }
 
 export function createFileHandlers(
@@ -71,6 +77,15 @@ export function createFileHandlers(
           : {}),
         ...(dependencies.createTempDirectory
           ? { createTempDirectory: dependencies.createTempDirectory }
+          : {}),
+        ...(dependencies.resolveHostname
+          ? { resolveHostname: dependencies.resolveHostname }
+          : {}),
+        ...(dependencies.externalTransport
+          ? { externalTransport: dependencies.externalTransport }
+          : {}),
+        ...(dependencies.removeDirectory
+          ? { removeDirectory: dependencies.removeDirectory }
           : {}),
       });
       return textResult(formatReadFile(file, result));
