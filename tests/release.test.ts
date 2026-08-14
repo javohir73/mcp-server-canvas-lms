@@ -92,6 +92,9 @@ describe('GitHub Actions release policy', () => {
     expect(workflow).toMatch(
       /release:[\s\S]*?GH_TOKEN: \$\{\{ github\.token \}\}/,
     );
+    expect(workflow).toMatch(
+      /release:[\s\S]*?GH_REPO: \$\{\{ github\.repository \}\}/,
+    );
     expect(workflow).toContain(
       'run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes',
     );
