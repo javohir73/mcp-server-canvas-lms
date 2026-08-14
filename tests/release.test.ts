@@ -53,6 +53,8 @@ describe('GitHub Actions release policy', () => {
     expect(workflow).toContain('contents: read');
     expect(workflow).toContain('id-token: write');
     expect(workflow).toContain('registry-url: https://registry.npmjs.org');
+    expect(workflow).toContain('package-manager-cache: false');
+    expect(workflow).not.toContain('cache: npm');
     expect(workflow).toContain(
       `run: node -e "const p=require('./package.json'); const tag=process.env.GITHUB_REF_NAME; if (tag !== 'v'+p.version) process.exit(1)"`,
     );
@@ -64,6 +66,7 @@ describe('GitHub Actions release policy', () => {
       'npm test',
       'npm run build',
       'npm pack --dry-run',
+      'npm audit --omit=dev',
       'npm publish --provenance --access public',
     ]) {
       expect(workflow).toContain(`run: ${command}`);
