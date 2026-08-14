@@ -49,6 +49,7 @@ export function createCourseHandlers(
           'Canvas syllabus',
           `Course: ${course.name}`,
           `Course ID: ${String(course.id)}`,
+          ...(course.html_url ? [`Canvas: ${course.html_url}`] : []),
           '',
           syllabus,
         ].join('\n'),
@@ -107,6 +108,7 @@ function formatGradeTotal(course: CanvasCourse): string {
     `Course ID: ${String(course.id)}`,
     formatScore(course),
     formatCurrentGrade(course),
+    ...(course.html_url ? [`Canvas: ${course.html_url}`] : []),
   ].join('\n');
 }
 
@@ -120,6 +122,7 @@ function formatGradeBreakdown(
     `Course ID: ${String(course.id)}`,
     formatScore(course),
     formatCurrentGrade(course),
+    ...(course.html_url ? [`Canvas: ${course.html_url}`] : []),
   ].join('\n');
   if (assignments.length === 0) {
     return `${heading}\n\nNo assignments with grade information found.`;
@@ -128,12 +131,12 @@ function formatGradeBreakdown(
 }
 
 function formatAssignmentGrade(assignment: CanvasAssignment): string {
-  const score = assignment.submission?.score ?? 0;
+  const score = assignment.submission?.score;
   const possible = assignment.points_possible;
   return [
     `Assignment: ${assignment.name}`,
     `Assignment ID: ${String(assignment.id)}`,
-    `Points: ${String(score)} / ${possible === null || possible === undefined ? 'not provided' : String(possible)}`,
+    `Points: ${score === null || score === undefined ? 'not graded' : String(score)} / ${possible === null || possible === undefined ? 'not provided' : String(possible)}`,
     `Grade: ${assignment.submission?.grade ?? 'not graded'}`,
     `Submission state: ${assignment.submission?.workflow_state ?? 'unsubmitted'}`,
     ...(assignment.html_url ? [`Canvas: ${assignment.html_url}`] : []),

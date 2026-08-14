@@ -87,6 +87,7 @@ describe('course handlers', () => {
     expect(text).toContain('Canvas syllabus');
     expect(text).toContain('Mythical Systems');
     expect(text).toContain('Course ID: 101');
+    expect(text).toContain('Canvas: https://canvas.example.edu/courses/101');
     expect(text).toContain('VOYAGE PLAN Read Chapter One.');
     expect(text).not.toMatch(/<[^>]+>|hidden\(\)/);
   });
@@ -120,13 +121,22 @@ describe('course handlers', () => {
     expect(text).toContain('Course ID: 101');
     expect(text).toContain('Current score: 91.5%');
     expect(text).toContain('Current score: hidden by Canvas');
+    expect(text).toContain('Canvas: https://canvas.example.edu/courses/101');
   });
 
   it('gets one course total and its per-assignment grade breakdown', async () => {
+    const zeroScoreAssignment = {
+      ...academicAssignments[101][0],
+      id: 1004,
+      name: 'Basilisk Safety Quiz',
+      submission: { workflow_state: 'graded', score: 0, grade: 'F' },
+    };
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(jsonResponse(academicCourses[0]))
-      .mockResolvedValueOnce(jsonResponse(academicAssignments[101]));
+      .mockResolvedValueOnce(
+        jsonResponse([academicAssignments[101][0], zeroScoreAssignment]),
+      );
 
     const text = responseText(
       await createHandlers(fetchMock).getGrades({ course_id: 101 }),
@@ -144,9 +154,13 @@ describe('course handlers', () => {
     );
     expect(text).toContain('Canvas grades');
     expect(text).toContain('Mythical Systems');
+    expect(text).toContain('Canvas: https://canvas.example.edu/courses/101');
     expect(text).toContain('Dragon Migration Map');
-    expect(text).toContain('Points: 0 / 40');
+    expect(text).toContain('Points: not graded / 40');
     expect(text).toContain('Grade: not graded');
+    expect(text).toContain('Basilisk Safety Quiz');
+    expect(text).toContain('Points: 0 / 40');
+    expect(text).toContain('Grade: F');
   });
 
   it('uses the course empty state when the active-course grade list is empty', async () => {
