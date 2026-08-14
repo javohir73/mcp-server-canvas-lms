@@ -87,6 +87,20 @@ export interface CanvasModuleItem {
   readonly page_url?: string;
   readonly content_id?: number;
   readonly url?: string;
+  readonly completion_requirement?: CanvasModuleCompletionRequirement | null;
+  readonly content_details?: CanvasModuleItemContentDetails | null;
+  readonly locked_for_user?: boolean;
+}
+
+export interface CanvasModuleCompletionRequirement {
+  readonly type?: string;
+  readonly min_score?: number | null;
+  readonly completed?: boolean;
+}
+
+export interface CanvasModuleItemContentDetails {
+  readonly locked_for_user?: boolean;
+  readonly lock_explanation?: string | null;
 }
 
 export interface CanvasPage {
