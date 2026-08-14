@@ -1,6 +1,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { afterEach, describe, expect, test } from 'vitest';
 import type { CanvasConfig } from '../src/config.js';
 import { createCanvasServer } from '../src/server.js';
@@ -75,8 +76,9 @@ describe('Canvas MCP tool registration', () => {
           name: toolName,
           arguments: { ...validArguments, [field]: invalidValue },
         });
-        expect(result.isError, `${String(field)}=${String(invalidValue)}`).toBe(
-          true,
+        expectFixedInputError(
+          result,
+          `${String(field)}=${String(invalidValue)}`,
         );
       }
     },
@@ -158,7 +160,7 @@ async function expectToolError(
   arguments_: Record<string, unknown>,
 ): Promise<void> {
   const result = await client.callTool({ name, arguments: arguments_ });
-  expect(result.isError).toBe(true);
+  expectFixedInputError(result);
 }
 
 async function expectToolSuccess(
@@ -168,4 +170,29 @@ async function expectToolSuccess(
 ): Promise<void> {
   const result = await client.callTool({ name, arguments: arguments_ });
   expect(result.isError).not.toBe(true);
+}
+
+function expectFixedInputError(
+  result: Awaited<ReturnType<Client['callTool']>>,
+  message?: string,
+): void {
+  expect(result.isError, message).toBe(true);
+  expect(immediateResult(result).content, message).toEqual([
+    { type: 'text', text: 'Invalid Canvas tool input.' },
+  ]);
+  const serialized = JSON.stringify(result);
+  expect(serialized, message).not.toContain('test-token');
+  expect(serialized, message).not.toContain('Authorization');
+  expect(serialized, message).not.toContain('Zod');
+  expect(serialized, message).not.toContain('expected');
+  expect(serialized, message).not.toContain('schema');
+}
+
+function immediateResult(
+  result: Awaited<ReturnType<Client['callTool']>>,
+): CallToolResult {
+  if (!('content' in result) || !Array.isArray(result.content)) {
+    throw new TypeError('Expected an immediate MCP tool result');
+  }
+  return result as CallToolResult;
 }

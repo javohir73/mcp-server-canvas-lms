@@ -1,5 +1,11 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import {
+  McpServer,
+  type ToolCallback,
+} from '@modelcontextprotocol/sdk/server/mcp.js';
+import {
+  CallToolRequestSchema,
+  type CallToolResult,
+} from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { CanvasClient } from './canvas/client.js';
 import type {
@@ -90,8 +96,24 @@ export function createCanvasServer(
   });
   const safe = <Input>(handler: (input: Input) => Promise<CallToolResult>) =>
     safeTool(handler, config.baseUrl.hostname);
+  const protocolTools = new Map<string, ProtocolTool>();
+  const registerTool = <InputSchema extends z.ZodType>(
+    name: string,
+    toolConfig: {
+      readonly description: string;
+      readonly inputSchema: InputSchema;
+      readonly annotations: typeof readOnlyAnnotations;
+    },
+    handler: (input: z.output<InputSchema>) => Promise<CallToolResult>,
+  ): void => {
+    server.registerTool(name, toolConfig, handler as ToolCallback<InputSchema>);
+    protocolTools.set(name, {
+      inputSchema: toolConfig.inputSchema,
+      handler: (input) => handler(input as z.output<InputSchema>),
+    });
+  };
 
-  server.registerTool(
+  registerTool(
     'canvas_list_courses',
     {
       description: `${readOnlyPrefix} List active courses, terms, and available current scores.`,
@@ -100,7 +122,7 @@ export function createCanvasServer(
     },
     safe(courseHandlers.listCourses),
   );
-  server.registerTool(
+  registerTool(
     'canvas_list_assignments',
     {
       description: `${readOnlyPrefix} List assignments for one course or all active courses.`,
@@ -121,7 +143,7 @@ export function createCanvasServer(
       }),
     ),
   );
-  server.registerTool(
+  registerTool(
     'canvas_get_assignment',
     {
       description: `${readOnlyPrefix} Read one assignment's requirements, rubric, and submission summary.`,
@@ -133,7 +155,7 @@ export function createCanvasServer(
     },
     safe(assignmentHandlers.getAssignment),
   );
-  server.registerTool(
+  registerTool(
     'canvas_get_grades',
     {
       description: `${readOnlyPrefix} Read grade totals or one course's assignment breakdown.`,
@@ -146,7 +168,7 @@ export function createCanvasServer(
       ),
     ),
   );
-  server.registerTool(
+  registerTool(
     'canvas_get_submission',
     {
       description: `${readOnlyPrefix} Read the current user's submission, comments, and rubric assessment.`,
@@ -158,7 +180,7 @@ export function createCanvasServer(
     },
     safe(assignmentHandlers.getSubmission),
   );
-  server.registerTool(
+  registerTool(
     'canvas_get_syllabus',
     {
       description: `${readOnlyPrefix} Read one course syllabus as cleaned text.`,
@@ -167,7 +189,7 @@ export function createCanvasServer(
     },
     safe(courseHandlers.getSyllabus),
   );
-  server.registerTool(
+  registerTool(
     'canvas_list_announcements',
     {
       description: `${readOnlyPrefix} List recent announcements for one or all active courses.`,
@@ -188,7 +210,7 @@ export function createCanvasServer(
       }),
     ),
   );
-  server.registerTool(
+  registerTool(
     'canvas_list_modules',
     {
       description: `${readOnlyPrefix} List one course's modules and module items.`,
@@ -197,7 +219,7 @@ export function createCanvasServer(
     },
     safe(contentHandlers.listModules),
   );
-  server.registerTool(
+  registerTool(
     'canvas_get_page',
     {
       description: `${readOnlyPrefix} Read one course page by its Canvas page URL slug.`,
@@ -214,7 +236,7 @@ export function createCanvasServer(
     },
     safe(contentHandlers.getPage),
   );
-  server.registerTool(
+  registerTool(
     'canvas_list_files',
     {
       description: `${readOnlyPrefix} List files in one course with an optional search term.`,
@@ -231,7 +253,7 @@ export function createCanvasServer(
       }),
     ),
   );
-  server.registerTool(
+  registerTool(
     'canvas_read_file',
     {
       description: `${readOnlyPrefix} Read or safely download one file that belongs to a course.`,
@@ -244,7 +266,29 @@ export function createCanvasServer(
     safe(fileHandlers.readFile),
   );
 
+  installSanitizedCallBoundary(server, protocolTools);
+
   return server;
+}
+
+interface ProtocolTool {
+  readonly inputSchema: z.ZodType;
+  readonly handler: (input: unknown) => Promise<CallToolResult>;
+}
+
+function installSanitizedCallBoundary(
+  server: McpServer,
+  tools: ReadonlyMap<string, ProtocolTool>,
+): void {
+  server.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const tool = tools.get(request.params.name);
+    if (!tool) return errorResult('Canvas tool was not found.');
+    const parsed = await tool.inputSchema.safeParseAsync(
+      request.params.arguments ?? {},
+    );
+    if (!parsed.success) return errorResult('Invalid Canvas tool input.');
+    return tool.handler(parsed.data);
+  });
 }
 
 function safeTool<Input>(
