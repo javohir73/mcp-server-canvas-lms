@@ -19,6 +19,8 @@ export interface CanvasEnrollment {
   readonly enrollment_state?: string;
   readonly current_score?: number | null;
   readonly current_grade?: string | null;
+  readonly computed_current_score?: number | null;
+  readonly computed_current_grade?: string | null;
   readonly final_score?: number | null;
   readonly final_grade?: string | null;
   readonly grades?: unknown;
@@ -53,7 +55,7 @@ export interface CanvasSubmission {
   readonly body?: string | null;
   readonly url?: string | null;
   readonly submission_comments?: readonly CanvasSubmissionComment[];
-  readonly rubric_assessment?: unknown;
+  readonly rubric_assessment?: Readonly<Record<string, CanvasRubricAssessment>>;
 }
 
 export interface CanvasAnnouncement {
@@ -114,7 +116,19 @@ export interface CanvasRubricCriterion {
   readonly description?: string;
   readonly long_description?: string | null;
   readonly points?: number | null;
-  readonly ratings?: unknown;
+  readonly ratings?: readonly CanvasRubricRating[];
+}
+
+export interface CanvasRubricRating {
+  readonly id?: string;
+  readonly description?: string;
+  readonly points?: number | null;
+}
+
+export interface CanvasRubricAssessment {
+  readonly points?: number | null;
+  readonly rating_id?: string | null;
+  readonly comments?: string | null;
 }
 
 export interface CanvasSubmissionComment {
