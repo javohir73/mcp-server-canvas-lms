@@ -41,8 +41,11 @@
     "prepack": "npm run build && npm test"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
-    "html-to-text": "^10.0.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "fflate": "0.8.3",
+    "html-to-text": "^10.0.1",
+    "pdfjs-dist": "5.4.624",
+    "saxes": "6.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

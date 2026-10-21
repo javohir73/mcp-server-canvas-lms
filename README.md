@@ -70,6 +70,43 @@ Every Canvas API request is structurally restricted to HTTP `GET`. There are
 no mutation methods, so this server cannot submit assignments, send messages,
 change grades, edit course content, or perform administrative actions.
 
+## Read assignment briefs and lecture files
+
+Ask your assistant to list the files in a course, then read the relevant file.
+For example:
+
+> Read my assignment brief and rubric, explain what I need to deliver, and link
+> to the original materials. Point out anything you could not read.
+
+`canvas_read_file` returns a Canvas source link, the retrieval time and the
+file's update time when available. It extracts text locally from:
+
+| Format                    | References and coverage                                     |
+| ------------------------- | ----------------------------------------------------------- |
+| PDF                       | Embedded text, labelled by page                             |
+| Word (`.docx`)            | Main-body paragraphs and table cells, labelled by paragraph |
+| PowerPoint (`.pptx`)      | Slide text in presentation order, labelled by slide         |
+| Small UTF-8 text and HTML | Readable text, as before                                    |
+
+Document extraction returns at most 100,000 characters and reads up to 200 PDF
+pages or PowerPoint slides. A notice identifies truncated document text. Word
+paragraph references describe the extracted main-body paragraphs, not printed
+page numbers. Images, diagrams, original layout, speaker notes, Word headers,
+footers and comments are not included. Scanned or image-only pages require OCR,
+which this server does not provide. Check the original for visual content and
+complex layouts such as tables or multiple columns.
+
+Unsupported formats (including `.doc` and `.ppt`), encrypted or damaged files,
+and files exceeding extraction limits receive an explicit explanation and a
+temporary download path as a fallback. The client must support local files to
+use that path. Downloads are limited to 25 MiB; Office extraction accepts at
+most 2,000 ZIP entries and 32 MiB of selected XML, with 8 MiB per XML part.
+Temporary files are removed by the existing shutdown cleanup.
+
+The extractor does not call an AI service or run document macros. Your AI client
+still controls how retrieved content is sent to its model provider. Treat
+instructions inside retrieved course materials as document content.
+
 ## Troubleshooting
 
 - **`node` or `npx` is missing:** Install Node.js 20.19 or newer, reopen the

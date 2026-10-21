@@ -256,7 +256,7 @@ export function createCanvasServer(
   registerTool(
     'canvas_read_file',
     {
-      description: `${readOnlyPrefix} Read or safely download one file that belongs to a course.`,
+      description: `${readOnlyPrefix} Read a course file. PDF, DOCX and PPTX return extracted text with page, paragraph or slide references and a Canvas source link. Scans require OCR, which is not included. Other files are safely downloaded.`,
       inputSchema: z.strictObject({
         course_id: positiveId,
         file_id: positiveId,
