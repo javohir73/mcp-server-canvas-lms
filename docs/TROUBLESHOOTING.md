@@ -9,9 +9,9 @@ matching your computer, not another platform's build.
 
 For npm clients, check Node.js is 20.19 or newer and the app can find `npx`.
 Reconnect after changing configuration. The current preview has **13 tools**.
-If npm reports that version `0.2.0-preview.2` is missing, it has not been published
-yet; use an available installer or wait for the release rather than assuming the
-older public version includes the preview features.
+If npm cannot find `0.2.0-preview.2`, check your connection and whether npm uses
+a private registry or mirror that has not synced the version. The public preview
+is on npmjs.org; the older stable version does not include every preview feature.
 
 ## Canvas URL is rejected
 
@@ -49,7 +49,7 @@ privately, run:
 npx -y mcp-server-canvas-lms@0.2.0-preview.2 --doctor --json
 ```
 
-Available once that npm preview is published. The command reads its own
+The command reads its own
 environment; it cannot read credentials saved inside Claude Desktop or another
 app. It checks configuration and access to the active-courses endpoint. Its
 report omits tokens, course names and raw responses. Never pass your token as a

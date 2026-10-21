@@ -27,5 +27,6 @@ and ask:
 The base URL must not include `/api/v1`. The example token is a placeholder;
 never commit or share a real Canvas token.
 
-Version `0.2.0-preview.2` is a release candidate; versioned npm commands work
-after publication. See the [installation guide](../INSTALL.md) for availability.
+Version `0.2.0-preview.2` is a published preview. Use the exact version in these
+commands; the stable npm `latest` version remains `0.1.0`. See the
+[installation guide](../INSTALL.md).

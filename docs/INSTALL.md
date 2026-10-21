@@ -5,10 +5,9 @@ or ChatGPT conversation does not install software automatically.
 
 ## Claude Desktop: download an installer
 
-The upcoming release is **0.2.0-preview.2**. Its download links below become
-available when the GitHub release is published. Before publication, maintainers
-can download the tested installer artifacts from the pull request's
-**Desktop installers** workflow run. Unzip that artifact to get the `.mcpb`.
+**0.2.0-preview.2** is available from the
+[GitHub preview release](https://github.com/javohir73/mcp-server-canvas-lms/releases/tag/v0.2.0-preview.2).
+Choose the download matching your computer:
 
 | Computer                                   | Installer                                                                                                                                                                   |
 | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -53,8 +52,8 @@ Install Node.js **20.19 or newer**. An MCP client launches the package with:
 npx -y mcp-server-canvas-lms@0.2.0-preview.2
 ```
 
-This exact version is a release candidate; the command works after it is
-published to npm. The older public version does not contain all preview features.
+This exact preview version is published to npm. The stable `latest` version
+remains `0.1.0` and does not contain all preview features.
 No global npm installation is needed. Configure `CANVAS_BASE_URL` and
 `CANVAS_API_TOKEN` privately in your client. Launching the command by itself in a
 terminal starts a protocol server; it does not open a chat interface.

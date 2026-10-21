@@ -14,10 +14,11 @@ It offers separate Mac (Apple Silicon/Intel) and Windows x64 installers, with
 Canvas settings entered in a form. No terminal is needed.
 
 **Using a local MCP client with npm?** Use the same guide for client-specific
-steps. The upgraded release candidate is **0.2.0-preview.2**; its npm version and
-GitHub downloads become available when published. The older public release does
-not include every feature below. The versioned download links deliberately avoid
-silently installing an older release.
+steps. **0.2.0-preview.2** is available as an
+[npm preview](https://www.npmjs.com/package/mcp-server-canvas-lms/v/0.2.0-preview.2)
+and [GitHub release](https://github.com/javohir73/mcp-server-canvas-lms/releases/tag/v0.2.0-preview.2).
+Use the exact version below to get these upgrades; npm’s stable `latest` remains
+`0.1.0`.
 
 Ordinary Claude/ChatGPT browser conversations cannot install this local server
 from a GitHub link. A hosted connector is not included.
@@ -124,9 +125,9 @@ The tool checks up to 50 active courses, with at most six concurrent API
 requests. It reports denied or unavailable data, skipped courses and omitted
 items. Section counts refer only to checked data. Output is limited to 100,000
 characters with a truncation notice. It does not inspect every brief, check
-external assessment systems, send reminders. Use `canvas_check_changes` for on-demand comparisons between visits.
+external assessment systems or send reminders. Use `canvas_check_changes` for on-demand comparisons between visits.
 
-This tool is included in local preview `0.2.0-preview.2`; the public npm release is unchanged.
+This tool is included in published preview `0.2.0-preview.2`.
 
 ## Check what changed
 
@@ -186,9 +187,8 @@ npx -y mcp-server-canvas-lms@0.2.0-preview.2 --doctor
 npx -y mcp-server-canvas-lms@0.2.0-preview.2 --doctor --json
 ```
 
-These additions are currently a local preview and are not in the public npm
-release yet. To check the preview, run `node dist/index.js --doctor` from the
-built project, or add `--doctor` to the installed preview's executable command.
+These commands are included in published preview `0.2.0-preview.2`. You can also
+run `node dist/index.js --doctor` from a locally built checkout.
 The check reads `CANVAS_BASE_URL` and `CANVAS_API_TOKEN` from its own environment;
 it cannot read settings stored inside Claude Desktop or another app. Do not pass
 a token as a command-line argument or paste it into a support request.

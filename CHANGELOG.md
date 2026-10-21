@@ -1,6 +1,6 @@
 # Changes
 
-## 0.2.0-preview.2 — release candidate
+## 0.2.0-preview.2 — published preview
 
 - Downloadable Claude Desktop installers built and smoke-tested separately for
   Apple Silicon Macs, Intel Macs and Windows x64, with SHA-256 checksums.
@@ -13,6 +13,6 @@
 - Thirteen tools; every Canvas request remains GET-only. Change checks save
   minimal local metadata, with account isolation, locking and atomic replacement.
 
-This candidate is not the public npm release until published. Custom desktop
+Published under npm dist-tag `preview`; stable `latest` remains `0.1.0`. Custom desktop
 installers need manual updates. Real Claude Desktop UI installation still needs
 student testing. Browser Claude/ChatGPT remote connections are not included.

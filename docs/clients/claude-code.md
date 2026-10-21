@@ -3,8 +3,8 @@
 This guide is for the coding assistant **Claude Code**. For ordinary Claude,
 use the [Claude Desktop installer](../INSTALL.md).
 
-Install Node.js 20.19 or newer. After version `0.2.0-preview.2` is published,
-Claude Code can launch it through npm without cloning/building this repository.
+Install Node.js 20.19 or newer. Claude Code can launch published preview
+`0.2.0-preview.2` through npm without cloning/building this repository.
 Privately set `CANVAS_BASE_URL` and `CANVAS_API_TOKEN` in the environment from
 which you start Claude Code, then register the server for all projects:
 

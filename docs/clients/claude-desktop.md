@@ -70,5 +70,6 @@ The example token is a placeholder. Never commit or share a real Canvas token.
 See the [official MCP local-server guide](https://modelcontextprotocol.io/docs/develop/connect-local-servers)
 for Claude Desktop's current configuration workflow.
 
-Version `0.2.0-preview.2` is a release candidate; versioned npm commands work
-after publication. See the [installation guide](../INSTALL.md) for availability.
+Version `0.2.0-preview.2` is a published preview. Use the exact version in these
+commands; the stable npm `latest` version remains `0.1.0`. See the
+[installation guide](../INSTALL.md).

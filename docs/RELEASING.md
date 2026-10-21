@@ -1,6 +1,7 @@
 # Release checklist
 
-Candidate: `0.2.0-preview.2`. Nothing in a feature-branch push publishes to npm.
+Published preview: `0.2.0-preview.2`. The checklist below records the release
+process; nothing in a feature-branch push publishes to npm.
 
 1. Review and merge the upgrade pull request after CI and all three native
    installer jobs pass. Download each workflow artifact and confirm its expected
@@ -14,7 +15,7 @@ Candidate: `0.2.0-preview.2`. Nothing in a feature-branch push publishes to npm.
    `javohir73/mcp-server-canvas-lms`, workflow **`release.yml`**, permitted publish
    action, and matching GitHub environment if one is required. Do not add a
    long-lived token to the workflow. Local `npm whoami` is independent of GitHub
-   OIDC; the existing local session currently needs reauthentication.
+   OIDC; local credentials are not used by the GitHub OIDC workflow.
 4. Obtain maintainer approval to publish the reviewed release. Then tag the
    approved commit `v0.2.0-preview.2` and push that tag. This triggers native
    installer builds, verification and npm publishing with provenance.
