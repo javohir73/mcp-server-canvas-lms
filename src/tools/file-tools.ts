@@ -8,6 +8,10 @@ import {
   type TemporaryDirectoryFactory,
 } from '../canvas/download.js';
 import { textResult } from '../format/text.js';
+import {
+  extractDocument,
+  type DocumentExtraction,
+} from '../documents/extract.js';
 import type { Handler, ToolDependencies } from './types.js';
 
 export interface FileHandlers {
@@ -88,7 +92,22 @@ export function createFileHandlers(
           ? { removeDirectory: dependencies.removeDirectory }
           : {}),
       });
-      return textResult(formatReadFile(file, result));
+      const extraction =
+        result.kind === 'downloaded'
+          ? await extractDocument(result)
+          : undefined;
+      return textResult(
+        formatReadFile(
+          file,
+          result,
+          {
+            courseId: course_id,
+            origin: dependencies.canvasOrigin,
+            retrieved: dependencies.now().toISOString(),
+          },
+          extraction,
+        ),
+      );
     },
   };
 }
@@ -111,18 +130,33 @@ function formatFileSummary(file: CanvasFile): string {
 function formatReadFile(
   file: CanvasFile,
   result: Awaited<ReturnType<typeof downloadCanvasFile>>,
+  source: {
+    readonly courseId: number;
+    readonly origin: URL;
+    readonly retrieved: string;
+  },
+  extraction?: DocumentExtraction,
 ): string {
   const details = [
-    result.kind === 'inline' ? 'Canvas file' : 'Canvas file downloaded',
+    result.kind === 'inline' || extraction?.text !== undefined
+      ? 'Canvas file'
+      : 'Canvas file downloaded',
     `File: ${result.name}`,
     `File ID: ${String(file.id)}`,
     `MIME type: ${result.mimeType}`,
+    `Canvas: ${new URL(`/courses/${String(source.courseId)}/files/${String(file.id)}/preview`, source.origin).href}`,
+    `Retrieved: ${source.retrieved}`,
+    ...(file.updated_at ? [`Updated: ${file.updated_at}`] : []),
   ];
   if (result.kind === 'inline') {
     return [...details, '', result.text].join('\n');
   }
+  if (extraction?.text !== undefined) {
+    return [...details, extraction.notice, '', extraction.text].join('\n');
+  }
   return [
     ...details,
+    ...(extraction ? [extraction.notice] : []),
     `Size: ${String(result.size)} bytes`,
     `Temporary path: ${result.path}`,
   ].join('\n');

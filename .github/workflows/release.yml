@@ -4,9 +4,16 @@ on:
   push:
     tags: ['v*.*.*']
 
+permissions:
+  contents: read
+
 jobs:
+  installers:
+    uses: ./.github/workflows/installers.yml
+
   publish:
     name: Verify and publish to npm
+    needs: installers
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -29,11 +36,11 @@ jobs:
       - run: npm run build
       - run: npm pack --dry-run
       - run: npm audit --omit=dev
-      - run: npm publish --provenance --access public
+      - run: npm run release:publish
 
   release:
     name: Create GitHub Release
-    needs: publish
+    needs: [publish, installers]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -41,5 +48,11 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
-      - name: Publish generated release notes
-        run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
+      - name: Download tested installers
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: canvas-*
+          merge-multiple: true
+          path: release-assets
+      - name: Prepare release for final review
+        run: gh release create "$GITHUB_REF_NAME" release-assets/* --verify-tag --generate-notes --draft

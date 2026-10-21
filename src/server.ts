@@ -20,6 +20,8 @@ import { createAssignmentHandlers } from './tools/assignment-tools.js';
 import { createContentHandlers } from './tools/content-tools.js';
 import { createCourseHandlers } from './tools/course-tools.js';
 import { createFileHandlers } from './tools/file-tools.js';
+import { createChangesHandler } from './tools/change-tools.js';
+import { createOverviewHandler } from './tools/overview-tools.js';
 
 const positiveId = z.number().int().positive();
 const optionalLimit = z.number().int().min(1).max(100).optional();
@@ -49,6 +51,7 @@ export interface CanvasServerOptions {
   readonly downloadFetch?: typeof fetch;
   readonly timezone?: string;
   readonly now?: () => Date;
+  readonly stateDirectory?: string;
   readonly createTempDirectory?: TemporaryDirectoryFactory;
   readonly resolveHostname?: HostnameResolver;
   readonly externalTransport?: ExternalTransport;
@@ -70,6 +73,17 @@ export function createCanvasServer(
   const courseHandlers = createCourseHandlers(dependencies);
   const assignmentHandlers = createAssignmentHandlers(dependencies);
   const contentHandlers = createContentHandlers(dependencies);
+  const overviewHandler = createOverviewHandler({
+    ...dependencies,
+    canvasOrigin: config.baseUrl,
+  });
+  const changesHandler = createChangesHandler({
+    ...dependencies,
+    canvasOrigin: config.baseUrl,
+    ...(options.stateDirectory
+      ? { stateDirectory: options.stateDirectory }
+      : {}),
+  });
   const fileHandlers = createFileHandlers({
     ...dependencies,
     canvasOrigin: config.baseUrl,
@@ -92,7 +106,7 @@ export function createCanvasServer(
   });
   const server = new McpServer({
     name: 'mcp-server-canvas-lms',
-    version: '0.1.0',
+    version: '0.2.0-preview.2',
   });
   const safe = <Input>(handler: (input: Input) => Promise<CallToolResult>) =>
     safeTool(handler, config.baseUrl.hostname);
@@ -102,7 +116,12 @@ export function createCanvasServer(
     toolConfig: {
       readonly description: string;
       readonly inputSchema: InputSchema;
-      readonly annotations: typeof readOnlyAnnotations;
+      readonly annotations: {
+        readOnlyHint: boolean;
+        destructiveHint: boolean;
+        idempotentHint: boolean;
+        openWorldHint: boolean;
+      };
     },
     handler: (input: z.output<InputSchema>) => Promise<CallToolResult>,
   ): void => {
@@ -113,6 +132,57 @@ export function createCanvasServer(
     });
   };
 
+  registerTool(
+    'canvas_check_changes',
+    {
+      description: `${readOnlyPrefix} Use when a student asks what changed since their last check. Compare deadlines and newly seen announcements across active courses, saving minimal local history. First checks establish baselines. No automatic monitoring. Failed endpoints retain their prior baseline; long announcement gaps have limited coverage.`,
+      inputSchema: z.strictObject({
+        limit: z.number().int().min(1).max(100).optional(),
+      }),
+      annotations: { ...readOnlyAnnotations, idempotentHint: false },
+    },
+    safe((input) =>
+      changesHandler(input.limit === undefined ? {} : { limit: input.limit }),
+    ),
+  );
+  registerTool(
+    'canvas_get_weekly_overview',
+    {
+      description: `${readOnlyPrefix} Get a student weekly overview across active courses: upcoming deadlines, overdue work, completion to verify, undated tasks and recent announcements, with source links and partial-coverage notices. Defaults to the next seven days and past seven days.`,
+      inputSchema: z.strictObject({
+        days_ahead: z.number().int().min(1).max(30).optional(),
+        since_days: z.number().int().min(1).max(30).optional(),
+        limit: z.number().int().min(1).max(50).optional(),
+        timezone: z
+          .string()
+          .trim()
+          .min(1)
+          .max(100)
+          .refine((value) => {
+            try {
+              new Intl.DateTimeFormat('en', { timeZone: value }).format(0);
+              return true;
+            } catch {
+              return false;
+            }
+          })
+          .optional(),
+      }),
+      annotations: readOnlyAnnotations,
+    },
+    safe((input) =>
+      overviewHandler({
+        ...(input.days_ahead === undefined
+          ? {}
+          : { days_ahead: input.days_ahead }),
+        ...(input.since_days === undefined
+          ? {}
+          : { since_days: input.since_days }),
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+        ...(input.timezone === undefined ? {} : { timezone: input.timezone }),
+      }),
+    ),
+  );
   registerTool(
     'canvas_list_courses',
     {
@@ -256,7 +326,7 @@ export function createCanvasServer(
   registerTool(
     'canvas_read_file',
     {
-      description: `${readOnlyPrefix} Read or safely download one file that belongs to a course.`,
+      description: `${readOnlyPrefix} Read a course file. PDF, DOCX and PPTX return extracted text with page, paragraph or slide references and a Canvas source link. Scans require OCR, which is not included. Other files are safely downloaded.`,
       inputSchema: z.strictObject({
         course_id: positiveId,
         file_id: positiveId,

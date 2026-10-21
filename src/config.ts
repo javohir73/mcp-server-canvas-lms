@@ -29,7 +29,11 @@ export function loadConfig(env: NodeJS.ProcessEnv): Readonly<CanvasConfig> {
   if (baseUrl.username || baseUrl.password) {
     throw new Error('CANVAS_BASE_URL must not contain credentials');
   }
-  if (baseUrl.pathname !== '/' && baseUrl.pathname !== '') {
+  if (
+    (baseUrl.pathname !== '/' && baseUrl.pathname !== '') ||
+    baseUrl.search ||
+    baseUrl.hash
+  ) {
     throw new Error(
       'CANVAS_BASE_URL must be the Canvas origin without /api/v1',
     );

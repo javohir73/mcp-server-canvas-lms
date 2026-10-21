@@ -19,6 +19,8 @@ describe('loadConfig', () => {
     'http://canvas.example.edu',
     'https://user:pass@canvas.example.edu',
     'https://canvas.example.edu/api/v1',
+    'https://canvas.example.edu/?access_token=private-value',
+    'https://canvas.example.edu/#login',
   ])('rejects unsafe base URL %s', (baseUrl) => {
     expect(() =>
       loadConfig({
