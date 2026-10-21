@@ -1,6 +1,10 @@
 # Claude Desktop setup
 
-## Installer preview
+## Desktop installer
+
+Start with the [download guide](../INSTALL.md) for your computer.
+
+## Build and validation status
 
 If you have a Canvas LMS `.mcpb` file built for your platform and architecture,
 open it with Claude Desktop and follow the extension installation prompts. Enter
@@ -8,7 +12,8 @@ your university's Canvas URL and personal access token in the provided fields.
 The token field is marked sensitive so the host can mask and securely store it.
 No manual JSON editing is needed for this installation path.
 
-The current local preview is built for **macOS on Apple Silicon (darwin-arm64)**.
+Native builds are configured for **macOS Apple Silicon, macOS Intel and Windows x64**.
+Only download a bundle after its platform build has passed.
 The installer includes the upgraded document reader and its runtime dependencies.
 It has been validated and its packaged server tested; the installation flow has
 not been exercised in the Claude Desktop UI. Institutional settings may restrict
@@ -46,7 +51,7 @@ already contains other servers, merge this entry rather than replacing them.
   "mcpServers": {
     "canvas-lms": {
       "command": "npx",
-      "args": ["-y", "mcp-server-canvas-lms"],
+      "args": ["-y", "mcp-server-canvas-lms@0.2.0-preview.2"],
       "env": {
         "CANVAS_BASE_URL": "https://canvas.example.edu",
         "CANVAS_API_TOKEN": "replace-with-your-personal-token"
@@ -64,3 +69,6 @@ the connectors/tools menu, then ask:
 The example token is a placeholder. Never commit or share a real Canvas token.
 See the [official MCP local-server guide](https://modelcontextprotocol.io/docs/develop/connect-local-servers)
 for Claude Desktop's current configuration workflow.
+
+Version `0.2.0-preview.2` is a release candidate; versioned npm commands work
+after publication. See the [installation guide](../INSTALL.md) for availability.

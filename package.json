@@ -1,6 +1,6 @@
 {
   "name": "mcp-server-canvas-lms",
-  "version": "0.2.0-preview.1",
+  "version": "0.2.0-preview.2",
   "description": "Minimal, student-focused, strictly read-only MCP server for Canvas LMS",
   "type": "module",
   "license": "MIT",
@@ -39,7 +39,8 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "prepack": "npm run build && npm test"
+    "prepack": "npm run build && npm test",
+    "release:publish": "node scripts/publish-package.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",

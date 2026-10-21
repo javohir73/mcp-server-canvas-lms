@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Build the user's desktop-extension design from locked production dependencies.
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   copyFileSync,
   cpSync,
@@ -22,7 +23,8 @@ if (manifest.version !== pkg.version || manifest.name !== pkg.name)
   throw new Error('Manifest name and version must match package.json.');
 const output = resolve(
   root,
-  process.argv[2] ?? `${pkg.name}-${process.platform}-${process.arch}.mcpb`,
+  process.argv[2] ??
+    `${pkg.name}-${pkg.version}-${process.platform}-${process.arch}.mcpb`,
 );
 const npmCli = [
   process.env.npm_execpath,
@@ -69,6 +71,13 @@ try {
   run(process.execPath, [packager, 'pack', stage, archive], root);
   mkdirSync(dirname(output), { recursive: true });
   copyFileSync(archive, output);
+  const checksum = createHash('sha256')
+    .update(readFileSync(output))
+    .digest('hex');
+  writeFileSync(
+    `${output}.sha256`,
+    `${checksum}  ${output.split(/[\\/]/).at(-1)}\n`,
+  );
   console.log(`Built ${output}`);
 } finally {
   rmSync(workspace, { recursive: true, force: true });

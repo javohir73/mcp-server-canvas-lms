@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -18,9 +19,20 @@ import {
 } from './fixtures/documents.js';
 
 const execFileAsync = promisify(execFile);
+const npmCli = process.env.npm_execpath;
+if (!npmCli) throw new Error('Run package smoke tests through npm test.');
+const runNpm = (
+  command: string,
+  args: readonly string[],
+  options: { cwd?: string; env?: NodeJS.ProcessEnv },
+) =>
+  command === 'npm'
+    ? execFileAsync(process.execPath, [npmCli, ...args], options)
+    : execFileAsync(command, args, options);
 const projectRoot = resolve(import.meta.dirname, '..');
 
 const TOOL_NAMES = [
+  'canvas_check_changes',
   'canvas_get_assignment',
   'canvas_get_grades',
   'canvas_get_page',
@@ -47,18 +59,18 @@ interface PublishedPackage {
   readonly bugs?: { readonly url?: string };
 }
 
-test('packed package starts all twelve tools, reads course documents and returns a weekly overview', async () => {
+test('packed package starts all thirteen tools, reads course documents and returns a weekly overview', async () => {
   const smokeDirectory = await mkdtemp(join(tmpdir(), 'canvas-mcp-smoke-'));
   let tarballPath: string | undefined;
   let client: Client | undefined;
 
   try {
-    await execFileAsync('npm', ['run', 'build'], {
+    await runNpm('npm', ['run', 'build'], {
       cwd: projectRoot,
       env: { ...process.env, npm_config_dry_run: 'false' },
     });
 
-    const { stdout } = await execFileAsync(
+    const { stdout } = await runNpm(
       'npm',
       ['pack', '--json', '--ignore-scripts'],
       {
@@ -96,7 +108,7 @@ test('packed package starts all twelve tools, reads course documents and returns
       ),
     ).toBe(false);
 
-    await execFileAsync(
+    await runNpm(
       'npm',
       ['install', '--ignore-scripts', '--no-audit', '--no-fund', tarballPath],
       {
@@ -150,12 +162,16 @@ test('packed package starts all twelve tools, reads course documents and returns
     }
 
     const transport = new StdioClientTransport({
-      command: join(
-        smokeDirectory,
-        'node_modules',
-        '.bin',
-        'mcp-server-canvas-lms',
-      ),
+      command: process.execPath,
+      args: [
+        join(
+          smokeDirectory,
+          'node_modules',
+          'mcp-server-canvas-lms',
+          'bin',
+          'mcp-server-canvas-lms.js',
+        ),
+      ],
       cwd: smokeDirectory,
       env: {
         ...getDefaultEnvironment(),
@@ -216,11 +232,12 @@ test('packed package starts all twelve tools, reads course documents and returns
           await server.close();
         }
       }
+      let weeklyDue = '2026-10-22T00:00:00Z';
       const overviewServer = createCanvasServer({ baseUrl: new URL('https://canvas.example.edu'), apiToken: 'fictional-smoke-token', timeoutMs: 15000, maxPages: 20 }, {
         now: () => new Date('2026-10-21T00:00:00Z'),
         fetchImpl: async (input) => {
           const path = new URL(String(input)).pathname;
-          return new Response(JSON.stringify(path === '/api/v1/courses' ? [{ id: 101, name: 'Weekly course' }] : path.endsWith('/assignments') ? [{ id: 7, course_id: 101, name: 'Weekly assignment', due_at: '2026-10-22T00:00:00Z', submission: { workflow_state: 'unsubmitted' } }] : []));
+          return new Response(JSON.stringify(path === '/api/v1/users/self' ? { id: 7 } : path === '/api/v1/courses' ? [{ id: 101, name: 'Weekly course' }] : path.endsWith('/assignments') ? [{ id: 7, course_id: 101, name: 'Weekly assignment', due_at: weeklyDue, submission: { workflow_state: 'unsubmitted' } }] : []));
         },
       });
       const overviewClient = new Client({ name: 'packed-overview-reader', version: '1.0.0' });
@@ -229,15 +246,22 @@ test('packed package starts all twelve tools, reads course documents and returns
         await overviewServer.connect(right);
         await overviewClient.connect(left);
         results.push(await overviewClient.callTool({ name: 'canvas_get_weekly_overview', arguments: {} }));
+        results.push(await overviewClient.callTool({ name: 'canvas_check_changes', arguments: {} }));
+        weeklyDue = '2026-10-25T00:00:00Z';
+        results.push(await overviewClient.callTool({ name: 'canvas_check_changes', arguments: {} }));
       } finally { await overviewClient.close(); await overviewServer.close(); }
       console.log(JSON.stringify(results));
     `;
-    const { stdout: documentOutput } = await execFileAsync(
+    const { stdout: documentOutput } = await runNpm(
       process.execPath,
       ['--input-type=module', '--eval', documentReaderScript],
       {
         cwd: smokeDirectory,
-        env: { ...process.env, DOCUMENT_FIXTURES: JSON.stringify(fixtures) },
+        env: {
+          ...process.env,
+          CANVAS_STATE_DIR: join(smokeDirectory, 'history'),
+          DOCUMENT_FIXTURES: JSON.stringify(fixtures),
+        },
       },
     );
     const documents = JSON.parse(documentOutput) as Array<{
@@ -253,6 +277,10 @@ test('packed package starts all twelve tools, reads course documents and returns
       'Slide 1\nFirst: learning objectives',
     );
     expect(documents[3]?.content[0]?.text).toContain('Weekly assignment');
+    expect(documents[4]?.content[0]?.text).toContain('Baseline saved');
+    expect(documents[5]?.content[0]?.text).toContain(
+      'Deadline changed: Weekly assignment',
+    );
 
     await checkInstalledCommands(
       join(
@@ -265,10 +293,13 @@ test('packed package starts all twelve tools, reads course documents and returns
     );
 
     const extensionPath = join(smokeDirectory, 'canvas-preview.mcpb');
-    await execFileAsync(
-      process.execPath,
-      ['scripts/build-mcpb.mjs', extensionPath],
-      { cwd: projectRoot },
+    await runNpm(process.execPath, ['scripts/build-mcpb.mjs', extensionPath], {
+      cwd: projectRoot,
+    });
+    expect(await readFile(extensionPath + '.sha256', 'utf8')).toBe(
+      createHash('sha256')
+        .update(await readFile(extensionPath))
+        .digest('hex') + '  canvas-preview.mcpb\n',
     );
     const extension = unzipSync(new Uint8Array(await readFile(extensionPath)));
     const manifest = JSON.parse(strFromU8(extension['manifest.json']!));
@@ -296,12 +327,16 @@ test('packed package starts all twelve tools, reads course documents and returns
       await mkdir(dirname(destination), { recursive: true });
       await writeFile(destination, bytes);
     }
-    const { stdout: extensionOutput } = await execFileAsync(
+    const { stdout: extensionOutput } = await runNpm(
       process.execPath,
       ['--input-type=module', '--eval', documentReaderScript],
       {
         cwd: extensionRoot,
-        env: { ...process.env, DOCUMENT_FIXTURES: JSON.stringify(fixtures) },
+        env: {
+          ...process.env,
+          CANVAS_STATE_DIR: join(smokeDirectory, 'extension-history'),
+          DOCUMENT_FIXTURES: JSON.stringify(fixtures),
+        },
       },
     );
     const extensionDocuments = JSON.parse(extensionOutput) as Array<{
@@ -319,6 +354,10 @@ test('packed package starts all twelve tools, reads course documents and returns
     expect(extensionDocuments[3]?.content[0]?.text).toContain(
       'Weekly assignment',
     );
+    expect(extensionDocuments[4]?.content[0]?.text).toContain('Baseline saved');
+    expect(extensionDocuments[5]?.content[0]?.text).toContain(
+      'Deadline changed: Weekly assignment',
+    );
     await checkInstalledCommands(
       join(extensionRoot, manifest.server.entry_point),
     );
@@ -334,7 +373,7 @@ test('packed package starts all twelve tools, reads course documents and returns
 
 async function checkInstalledCommands(entry: string): Promise<void> {
   const baseEnv = { ...process.env, CANVAS_BASE_URL: '', CANVAS_API_TOKEN: '' };
-  const help = await execFileAsync(process.execPath, [entry, '--help'], {
+  const help = await runNpm(process.execPath, [entry, '--help'], {
     env: baseEnv,
   });
   expect(help.stdout).toContain('--doctor');
@@ -367,7 +406,7 @@ async function checkInstalledCommands(entry: string): Promise<void> {
     const address = server.address();
     if (!address || typeof address === 'string')
       throw new Error('Missing test port');
-    const result = await execFileAsync(
+    const result = await runNpm(
       process.execPath,
       [entry, '--doctor', '--json'],
       {

@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -15,6 +18,7 @@ const config: Readonly<CanvasConfig> = Object.freeze({
   maxPages: 2,
 });
 
+const directories: string[] = [];
 const openConnections: Array<{ client: Client; server: McpServer }> = [];
 
 afterEach(async () => {
@@ -24,15 +28,21 @@ afterEach(async () => {
       await server.close();
     }),
   );
+  await Promise.all(
+    directories
+      .splice(0)
+      .map((path) => rm(path, { recursive: true, force: true })),
+  );
   vi.restoreAllMocks();
 });
 
 describe('read-only MCP security boundary', () => {
-  test('all twelve tools produce GET-only Canvas and file traffic', async () => {
+  test('all thirteen tools produce GET-only Canvas and file traffic', async () => {
     const requests: RequestRecord[] = [];
     const { client } = await connectCanvasServer(routingFetch(requests));
     const calls = [
       ['canvas_list_courses', {}],
+      ['canvas_check_changes', {}],
       ['canvas_get_weekly_overview', {}],
       ['canvas_list_assignments', { course_id: 1, bucket: 'all', limit: 1 }],
       ['canvas_get_assignment', { course_id: 1, assignment_id: 2 }],
@@ -145,6 +155,7 @@ function routingFetch(requests: RequestRecord[]): typeof fetch {
     const url = new URL(requestUrl(input));
     requests.push({ url: url.href, method: init?.method });
 
+    if (url.pathname === '/api/v1/users/self') return jsonResponse({ id: 7 });
     if (url.pathname === '/api/v1/courses') return jsonResponse([]);
     if (url.pathname === '/api/v1/courses/1') {
       return jsonResponse({
@@ -199,7 +210,12 @@ async function connectCanvasServer(
   fetchImpl: typeof fetch,
   options: { readonly now?: () => Date } = {},
 ): Promise<{ client: Client; server: McpServer }> {
+  const stateDirectory = await mkdtemp(
+    join(tmpdir(), 'canvas-security-history-'),
+  );
+  directories.push(stateDirectory);
   const server = createCanvasServer(config, {
+    stateDirectory,
     fetchImpl,
     timezone: 'Australia/Sydney',
     now: options.now ?? (() => new Date('2026-08-14T00:00:00.000Z')),

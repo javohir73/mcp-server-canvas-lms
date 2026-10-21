@@ -20,6 +20,7 @@ import { createAssignmentHandlers } from './tools/assignment-tools.js';
 import { createContentHandlers } from './tools/content-tools.js';
 import { createCourseHandlers } from './tools/course-tools.js';
 import { createFileHandlers } from './tools/file-tools.js';
+import { createChangesHandler } from './tools/change-tools.js';
 import { createOverviewHandler } from './tools/overview-tools.js';
 
 const positiveId = z.number().int().positive();
@@ -50,6 +51,7 @@ export interface CanvasServerOptions {
   readonly downloadFetch?: typeof fetch;
   readonly timezone?: string;
   readonly now?: () => Date;
+  readonly stateDirectory?: string;
   readonly createTempDirectory?: TemporaryDirectoryFactory;
   readonly resolveHostname?: HostnameResolver;
   readonly externalTransport?: ExternalTransport;
@@ -75,6 +77,13 @@ export function createCanvasServer(
     ...dependencies,
     canvasOrigin: config.baseUrl,
   });
+  const changesHandler = createChangesHandler({
+    ...dependencies,
+    canvasOrigin: config.baseUrl,
+    ...(options.stateDirectory
+      ? { stateDirectory: options.stateDirectory }
+      : {}),
+  });
   const fileHandlers = createFileHandlers({
     ...dependencies,
     canvasOrigin: config.baseUrl,
@@ -97,7 +106,7 @@ export function createCanvasServer(
   });
   const server = new McpServer({
     name: 'mcp-server-canvas-lms',
-    version: '0.2.0-preview.1',
+    version: '0.2.0-preview.2',
   });
   const safe = <Input>(handler: (input: Input) => Promise<CallToolResult>) =>
     safeTool(handler, config.baseUrl.hostname);
@@ -107,7 +116,12 @@ export function createCanvasServer(
     toolConfig: {
       readonly description: string;
       readonly inputSchema: InputSchema;
-      readonly annotations: typeof readOnlyAnnotations;
+      readonly annotations: {
+        readOnlyHint: boolean;
+        destructiveHint: boolean;
+        idempotentHint: boolean;
+        openWorldHint: boolean;
+      };
     },
     handler: (input: z.output<InputSchema>) => Promise<CallToolResult>,
   ): void => {
@@ -118,6 +132,19 @@ export function createCanvasServer(
     });
   };
 
+  registerTool(
+    'canvas_check_changes',
+    {
+      description: `${readOnlyPrefix} Use when a student asks what changed since their last check. Compare deadlines and newly seen announcements across active courses, saving minimal local history. First checks establish baselines. No automatic monitoring. Failed endpoints retain their prior baseline; long announcement gaps have limited coverage.`,
+      inputSchema: z.strictObject({
+        limit: z.number().int().min(1).max(100).optional(),
+      }),
+      annotations: { ...readOnlyAnnotations, idempotentHint: false },
+    },
+    safe((input) =>
+      changesHandler(input.limit === undefined ? {} : { limit: input.limit }),
+    ),
+  );
   registerTool(
     'canvas_get_weekly_overview',
     {

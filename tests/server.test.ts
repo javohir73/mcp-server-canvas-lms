@@ -7,6 +7,7 @@ import type { CanvasConfig } from '../src/config.js';
 import { createCanvasServer } from '../src/server.js';
 
 const TOOL_NAMES = [
+  'canvas_check_changes',
   'canvas_get_assignment',
   'canvas_get_grades',
   'canvas_get_page',
@@ -40,7 +41,7 @@ afterEach(async () => {
 });
 
 describe('Canvas MCP tool registration', () => {
-  test('discovers exactly the twelve approved read-only tools', async () => {
+  test('discovers exactly the thirteen approved read-only tools', async () => {
     const { client } = await connectCanvasServer();
 
     const result = await client.listTools();
@@ -129,6 +130,23 @@ describe('Canvas MCP tool registration', () => {
     await expectToolError(client, 'canvas_list_courses', {
       arbitrary_path: '/api/v1/users',
     });
+  });
+
+  test('validates change-tracking inputs before any Canvas or history access', async () => {
+    let requests = 0;
+    const { client } = await connectCanvasServer(async () => {
+      requests += 1;
+      return new Response('[]');
+    });
+    for (const input of [
+      { limit: 0 },
+      { limit: 101 },
+      { limit: '10' },
+      { reset: true },
+      { user_id: 7 },
+    ])
+      await expectToolError(client, 'canvas_check_changes', input);
+    expect(requests).toBe(0);
   });
 
   test('validates overview windows, limits and timezone before fetching data', async () => {

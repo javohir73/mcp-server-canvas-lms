@@ -77,7 +77,7 @@ describe('GitHub Actions release policy', () => {
       'npm run build',
       'npm pack --dry-run',
       'npm audit --omit=dev',
-      'npm publish --provenance --access public',
+      'npm run release:publish',
     ]);
   });
 
@@ -85,7 +85,7 @@ describe('GitHub Actions release policy', () => {
     const workflow = await readWorkflow('release.yml');
 
     expect(workflow).toMatch(/release:\s*\n\s+name: Create GitHub Release/);
-    expect(workflow).toMatch(/release:[\s\S]*?needs: publish/);
+    expect(workflow).toMatch(/release:[\s\S]*?needs: \[publish, installers\]/);
     expect(workflow).toMatch(
       /release:[\s\S]*?permissions:\s*\n\s+contents: write/,
     );
@@ -96,7 +96,7 @@ describe('GitHub Actions release policy', () => {
       /release:[\s\S]*?GH_REPO: \$\{\{ github\.repository \}\}/,
     );
     expect(workflow).toContain(
-      'run: gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes',
+      'run: gh release create "$GITHUB_REF_NAME" release-assets/* --verify-tag --generate-notes --draft',
     );
   });
 
@@ -104,13 +104,16 @@ describe('GitHub Actions release policy', () => {
     const workflows = await Promise.all([
       readWorkflow('ci.yml'),
       readWorkflow('release.yml'),
+      readWorkflow('installers.yml'),
     ]);
 
     const actionReferences = workflows.flatMap((workflow) =>
       workflow
         .split('\n')
         .map((line) => line.trim())
-        .filter((line) => line.startsWith('uses:')),
+        .filter(
+          (line) => line.startsWith('uses:') && !line.startsWith('uses: ./'),
+        ),
     );
 
     expect(actionReferences.length).toBeGreaterThan(0);
@@ -143,4 +146,47 @@ describe('GitHub Actions release policy', () => {
     expect(config.match(/interval: weekly/g)).toHaveLength(2);
     expect(config).not.toMatch(/auto-?merge|merge-method/i);
   });
+});
+
+test('installer builds use native Mac and Windows runners and smoke-test packages before upload', async () => {
+  const workflow = await readWorkflow('installers.yml');
+  for (const platform of ['macos-14', 'macos-15-intel', 'windows-2022'])
+    expect(workflow).toContain(platform);
+  expect(workflow).toContain('pull_request:');
+  expect(workflow).toContain('workflow_call:');
+  expectCommandsInOrder(workflow, [
+    'npm ci',
+    'npm run typecheck',
+    'npm test -- tests/package.test.ts',
+    'npm run build:mcpb',
+  ]);
+  expect(workflow.indexOf('uses: actions/upload-artifact@')).toBeGreaterThan(
+    workflow.indexOf('run: npm run build:mcpb'),
+  );
+});
+
+test('publish command explicitly selects preview without changing npm latest, and rejects a mismatched release tag', async () => {
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const run = promisify(execFile);
+  const { version } = JSON.parse(
+    await readFile(resolve(projectRoot, 'package.json'), 'utf8'),
+  );
+  const command = resolve(projectRoot, 'scripts/publish-package.mjs');
+  const result = await run(process.execPath, [command, '--check'], {
+    env: { ...process.env, GITHUB_REF_NAME: `v${version}` },
+  });
+  expect(JSON.parse(result.stdout)).toEqual([
+    'publish',
+    '--provenance',
+    '--access',
+    'public',
+    '--tag',
+    'preview',
+  ]);
+  await expect(
+    run(process.execPath, [command, '--check'], {
+      env: { ...process.env, GITHUB_REF_NAME: 'v0.0.0-wrong' },
+    }),
+  ).rejects.toMatchObject({ code: 1 });
 });

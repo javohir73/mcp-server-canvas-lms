@@ -16,7 +16,7 @@ the stdio server type:
     "canvas-lms": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "mcp-server-canvas-lms"],
+      "args": ["-y", "mcp-server-canvas-lms@0.2.0-preview.2"],
       "env": {
         "CANVAS_BASE_URL": "https://canvas.example.edu",
         "CANVAS_API_TOKEN": "replace-with-your-personal-token"
@@ -34,3 +34,6 @@ Then ask in agent chat:
 The example token is a placeholder. Never commit or share a real Canvas token.
 See the [official VS Code MCP configuration reference](https://code.visualstudio.com/docs/agents/reference/mcp-configuration)
 for the current schema and commands.
+
+Version `0.2.0-preview.2` is a release candidate; versioned npm commands work
+after publication. See the [installation guide](../INSTALL.md) for availability.

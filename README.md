@@ -6,9 +6,26 @@ It gives MCP clients access to courses, assignments, grades, submissions,
 syllabi, announcements, modules, pages, and files without exposing any Canvas
 write operation.
 
+## Install
+
+**Using Claude Desktop?** Start with the
+[download and installation guide](https://github.com/javohir73/mcp-server-canvas-lms/blob/main/docs/INSTALL.md).
+It offers separate Mac (Apple Silicon/Intel) and Windows x64 installers, with
+Canvas settings entered in a form. No terminal is needed.
+
+**Using a local MCP client with npm?** Use the same guide for client-specific
+steps. The upgraded release candidate is **0.2.0-preview.2**; its npm version and
+GitHub downloads become available when published. The older public release does
+not include every feature below. The versioned download links deliberately avoid
+silently installing an older release.
+
+Ordinary Claude/ChatGPT browser conversations cannot install this local server
+from a GitHub link. A hosted connector is not included.
+
 ## Requirements
 
-- Node.js 20.19 or newer. Check with `node --version`.
+- For npm setup: Node.js 20.19 or newer. Check with `node --version`.
+  Claude Desktop installers use the app’s bundled runtime.
 - A Canvas personal access token. In Canvas, go to
   `Account -> Settings -> Approved Integrations -> + New Access Token`.
 - Your institution's Canvas base URL, such as
@@ -22,7 +39,7 @@ Some institutions disable personal access tokens. If the New Access Token
 option is unavailable, ask your Canvas administrator whether personal tokens
 are permitted.
 
-## Quick start
+## npm setup
 
 For Claude Desktop, a `.mcpb` installer can collect the Canvas URL and access token
 in a form. See the
@@ -34,7 +51,7 @@ The server is launched by an MCP client over standard input/output. Its primary
 command is:
 
 ```sh
-npx -y mcp-server-canvas-lms
+npx -y mcp-server-canvas-lms@0.2.0-preview.2
 ```
 
 Configure these two environment variables in your MCP client:
@@ -56,22 +73,23 @@ or a
 
 ## Tools
 
-The server exposes twelve read-only tools:
+The server exposes thirteen tools with read-only Canvas access:
 
-| Tool                         | Reads                                                                     |
-| ---------------------------- | ------------------------------------------------------------------------- |
-| `canvas_list_courses`        | Active courses, terms, and current scores                                 |
-| `canvas_list_assignments`    | Assignments for one or all active courses                                 |
-| `canvas_get_assignment`      | Requirements, rubric, and submission summary                              |
-| `canvas_get_grades`          | Course totals or assignment-level grades                                  |
-| `canvas_get_submission`      | The current user's submission, comments, and rubric assessment            |
-| `canvas_get_syllabus`        | A course syllabus as cleaned text                                         |
-| `canvas_get_weekly_overview` | Upcoming deadlines, overdue work and recent announcements across subjects |
-| `canvas_list_announcements`  | Recent course announcements                                               |
-| `canvas_list_modules`        | Modules and their items                                                   |
-| `canvas_get_page`            | A course page by its Canvas URL slug                                      |
-| `canvas_list_files`          | Course files and folders                                                  |
-| `canvas_read_file`           | Text from a supported course file                                         |
+| Tool                         | Reads                                                                               |
+| ---------------------------- | ----------------------------------------------------------------------------------- |
+| `canvas_check_changes`       | Changed deadlines, new assignments and newly seen announcements using local history |
+| `canvas_list_courses`        | Active courses, terms, and current scores                                           |
+| `canvas_list_assignments`    | Assignments for one or all active courses                                           |
+| `canvas_get_assignment`      | Requirements, rubric, and submission summary                                        |
+| `canvas_get_grades`          | Course totals or assignment-level grades                                            |
+| `canvas_get_submission`      | The current user's submission, comments, and rubric assessment                      |
+| `canvas_get_syllabus`        | A course syllabus as cleaned text                                                   |
+| `canvas_get_weekly_overview` | Upcoming deadlines, overdue work and recent announcements across subjects           |
+| `canvas_list_announcements`  | Recent course announcements                                                         |
+| `canvas_list_modules`        | Modules and their items                                                             |
+| `canvas_get_page`            | A course page by its Canvas URL slug                                                |
+| `canvas_list_files`          | Course files and folders                                                            |
+| `canvas_read_file`           | Text from a supported course file                                                   |
 
 Every Canvas API request is structurally restricted to HTTP `GET`. There are
 no mutation methods, so this server cannot submit assignments, send messages,
@@ -106,9 +124,18 @@ The tool checks up to 50 active courses, with at most six concurrent API
 requests. It reports denied or unavailable data, skipped courses and omitted
 items. Section counts refer only to checked data. Output is limited to 100,000
 characters with a truncation notice. It does not inspect every brief, check
-external assessment systems, track changes between visits or send reminders.
+external assessment systems, send reminders. Use `canvas_check_changes` for on-demand comparisons between visits.
 
-This tool is included in local preview `0.2.0-preview.1`; the public npm release is unchanged.
+This tool is included in local preview `0.2.0-preview.2`; the public npm release is unchanged.
+
+## Check what changed
+
+Ask: “What changed since my last check? Show moved deadlines and new announcements.”
+`canvas_check_changes` saves a baseline on the first check and compares subsequent
+checks, showing previous/new dates and Canvas source links. Failed endpoints keep
+their previous baseline. The tool stores minimal metadata locally, not tokens or
+coursework bodies. It does not run automatically or send notifications. See
+[history, coverage limits and reset](https://github.com/javohir73/mcp-server-canvas-lms/blob/main/docs/HISTORY.md).
 
 ## Read assignment briefs and lecture files
 
@@ -149,12 +176,14 @@ instructions inside retrieved course materials as document content.
 
 ## Troubleshooting
 
+[Connection troubleshooting guide](https://github.com/javohir73/mcp-server-canvas-lms/blob/main/docs/TROUBLESHOOTING.md).
+
 Builds containing diagnostics support these commands:
 
 ```sh
-npx -y mcp-server-canvas-lms --help
-npx -y mcp-server-canvas-lms --doctor
-npx -y mcp-server-canvas-lms --doctor --json
+npx -y mcp-server-canvas-lms@0.2.0-preview.2 --help
+npx -y mcp-server-canvas-lms@0.2.0-preview.2 --doctor
+npx -y mcp-server-canvas-lms@0.2.0-preview.2 --doctor --json
 ```
 
 These additions are currently a local preview and are not in the public npm
