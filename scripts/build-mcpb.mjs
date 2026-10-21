@@ -84,7 +84,13 @@ try {
 }
 
 function run(command, args, cwd) {
-  const result = spawnSync(command, args, { cwd, stdio: 'inherit' });
+  // A builder must install real dependencies even when invoked by npm's
+  // prepack hook during `npm pack --dry-run`.
+  const result = spawnSync(command, args, {
+    cwd,
+    stdio: 'inherit',
+    env: { ...process.env, npm_config_dry_run: 'false' },
+  });
   if (result.error || result.status !== 0)
     throw new Error(
       `Desktop-extension build failed (exit ${result.status ?? 'unknown'}).`,

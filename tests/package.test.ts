@@ -65,6 +65,7 @@ test('packed package starts all thirteen tools, reads course documents and retur
   let client: Client | undefined;
 
   try {
+    progress('Build package');
     await runNpm('npm', ['run', 'build'], {
       cwd: projectRoot,
       env: { ...process.env, npm_config_dry_run: 'false' },
@@ -108,6 +109,7 @@ test('packed package starts all thirteen tools, reads course documents and retur
       ),
     ).toBe(false);
 
+    progress('Install clean npm package');
     await runNpm(
       'npm',
       ['install', '--ignore-scripts', '--no-audit', '--no-fund', tarballPath],
@@ -185,6 +187,7 @@ test('packed package starts all thirteen tools, reads course documents and retur
       version: '1.0.0',
     });
 
+    progress('Connect installed stdio server');
     await client.connect(transport);
     const tools = await client.listTools();
 
@@ -252,6 +255,7 @@ test('packed package starts all thirteen tools, reads course documents and retur
       } finally { await overviewClient.close(); await overviewServer.close(); }
       console.log(JSON.stringify(results));
     `;
+    progress('Read documents, overview and changes from npm package');
     const { stdout: documentOutput } = await runNpm(
       process.execPath,
       ['--input-type=module', '--eval', documentReaderScript],
@@ -282,6 +286,7 @@ test('packed package starts all thirteen tools, reads course documents and retur
       'Deadline changed: Weekly assignment',
     );
 
+    progress('Check installed CLI');
     await checkInstalledCommands(
       join(
         smokeDirectory,
@@ -292,9 +297,11 @@ test('packed package starts all thirteen tools, reads course documents and retur
       ),
     );
 
+    progress('Build desktop bundle');
     const extensionPath = join(smokeDirectory, 'canvas-preview.mcpb');
     await runNpm(process.execPath, ['scripts/build-mcpb.mjs', extensionPath], {
       cwd: projectRoot,
+      env: { ...process.env, npm_config_dry_run: 'true' },
     });
     expect(await readFile(extensionPath + '.sha256', 'utf8')).toBe(
       createHash('sha256')
@@ -327,6 +334,7 @@ test('packed package starts all thirteen tools, reads course documents and retur
       await mkdir(dirname(destination), { recursive: true });
       await writeFile(destination, bytes);
     }
+    progress('Read documents, overview and changes from desktop bundle');
     const { stdout: extensionOutput } = await runNpm(
       process.execPath,
       ['--input-type=module', '--eval', documentReaderScript],
@@ -358,6 +366,7 @@ test('packed package starts all thirteen tools, reads course documents and retur
     expect(extensionDocuments[5]?.content[0]?.text).toContain(
       'Deadline changed: Weekly assignment',
     );
+    progress('Check desktop CLI');
     await checkInstalledCommands(
       join(extensionRoot, manifest.server.entry_point),
     );
@@ -433,4 +442,8 @@ async function checkInstalledCommands(entry: string): Promise<void> {
       server.close((error) => (error ? reject(error) : resolve())),
     );
   }
+}
+
+function progress(stage: string): void {
+  if (process.env.CI) console.info('Package smoke: ' + stage);
 }

@@ -84,3 +84,10 @@ automated packaged-server tests from real Claude UI installation.
   production dependency audit reports zero advisories.
 - Review and native GitHub CI pending. No npm/GitHub release publication or
   installed-client configuration changes performed.
+- Fresh independent review: no material issues found. Draft PR #8 created and
+  attached. Initial native Mac arm64/x64 builds passed. Windows package smoke
+  timed out; stage instrumentation added to identify the boundary before fixing.
+- GitHub CI caught inherited `npm_config_dry_run=true` from the prepack dry run:
+  builder skipped production dependency installation. Added an explicit inherited
+  dry-run regression, observed missing PDF dependency failure locally, then forced
+  real subprocess builds. Full suite 249/249 passed after the fix.
