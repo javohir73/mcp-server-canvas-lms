@@ -1,0 +1,110 @@
+{
+  "manifest_version": "0.3",
+  "name": "mcp-server-canvas-lms",
+  "display_name": "Canvas LMS",
+  "version": "0.1.0",
+  "description": "Read your Canvas courses, assignments and feedback, with text from PDFs, Word documents and PowerPoint slides.",
+  "long_description": "A minimal, student-focused, strictly read-only MCP server for Canvas LMS.\n\nAsk Claude about your courses, upcoming assignments, grades and instructor feedback, announcements, syllabi, modules, pages, and course files, including text from PDF, Word and PowerPoint documents with source references. Every Canvas request is an HTTP GET: this server cannot submit assignments, send messages, change grades, or modify anything in Canvas.\n\nYou need your institution's Canvas URL (for example https://canvas.example.edu) and a Canvas personal access token (Canvas \u2192 Account \u2192 Settings \u2192 Approved Integrations \u2192 New Access Token). The token is stored securely by Claude Desktop and is only ever sent to your Canvas server.",
+  "author": {
+    "name": "Javohir Azizov",
+    "url": "https://github.com/javohir73"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/javohir73/mcp-server-canvas-lms"
+  },
+  "homepage": "https://github.com/javohir73/mcp-server-canvas-lms#readme",
+  "documentation": "https://github.com/javohir73/mcp-server-canvas-lms/blob/main/README.md",
+  "support": "https://github.com/javohir73/mcp-server-canvas-lms/issues",
+  "license": "MIT",
+  "keywords": [
+    "canvas",
+    "canvas-lms",
+    "lms",
+    "education",
+    "student",
+    "instructure",
+    "read-only"
+  ],
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/index.js"],
+      "env": {
+        "CANVAS_BASE_URL": "${user_config.canvas_base_url}",
+        "CANVAS_API_TOKEN": "${user_config.canvas_api_token}"
+      }
+    }
+  },
+  "user_config": {
+    "canvas_base_url": {
+      "type": "string",
+      "title": "Canvas URL",
+      "description": "Your institution's Canvas address, e.g. https://canvas.example.edu \u2014 the site root only, without /api/v1 or a course path.",
+      "required": true
+    },
+    "canvas_api_token": {
+      "type": "string",
+      "title": "Canvas access token",
+      "description": "A personal access token from Canvas \u2192 Account \u2192 Settings \u2192 Approved Integrations \u2192 New Access Token. Stored securely and sent only to your Canvas server.",
+      "sensitive": true,
+      "required": true
+    }
+  },
+  "tools": [
+    {
+      "name": "canvas_list_courses",
+      "description": "List active courses, terms, and available current scores."
+    },
+    {
+      "name": "canvas_list_assignments",
+      "description": "List assignments for one course or all active courses."
+    },
+    {
+      "name": "canvas_get_assignment",
+      "description": "Read one assignment's requirements, rubric, and submission summary."
+    },
+    {
+      "name": "canvas_get_grades",
+      "description": "Read grade totals or one course's assignment breakdown."
+    },
+    {
+      "name": "canvas_get_submission",
+      "description": "Read the current user's submission, comments, and rubric assessment."
+    },
+    {
+      "name": "canvas_get_syllabus",
+      "description": "Read one course syllabus as cleaned text."
+    },
+    {
+      "name": "canvas_list_announcements",
+      "description": "List recent announcements for one or all active courses."
+    },
+    {
+      "name": "canvas_list_modules",
+      "description": "List one course's modules and module items."
+    },
+    {
+      "name": "canvas_get_page",
+      "description": "Read one course page by its Canvas page URL slug."
+    },
+    {
+      "name": "canvas_list_files",
+      "description": "List files in one course with an optional search term."
+    },
+    {
+      "name": "canvas_read_file",
+      "description": "Read a course file, extracting PDF, DOCX and PPTX text with source references; other files are safely downloaded."
+    }
+  ],
+  "tools_generated": false,
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=20.19.0"
+    }
+  }
+}

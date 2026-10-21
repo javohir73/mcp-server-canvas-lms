@@ -1,8 +1,10 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
+import { createServer } from 'node:http';
+import { unzipSync, strFromU8 } from 'fflate';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import {
   getDefaultEnvironment,
@@ -189,12 +191,7 @@ test('packed package clean-installs, starts all eleven tools and reads PDF, Word
         data: Buffer.from(presentationDocument()).toString('base64'),
       },
     ];
-    const { stdout: documentOutput } = await execFileAsync(
-      process.execPath,
-      [
-        '--input-type=module',
-        '--eval',
-        `
+    const documentReaderScript = `
       import { createCanvasServer } from 'mcp-server-canvas-lms';
       import { Client } from '@modelcontextprotocol/sdk/client/index.js';
       import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -217,8 +214,10 @@ test('packed package clean-installs, starts all eleven tools and reads PDF, Word
         }
       }
       console.log(JSON.stringify(results));
-    `,
-      ],
+    `;
+    const { stdout: documentOutput } = await execFileAsync(
+      process.execPath,
+      ['--input-type=module', '--eval', documentReaderScript],
       {
         cwd: smokeDirectory,
         env: { ...process.env, DOCUMENT_FIXTURES: JSON.stringify(fixtures) },
@@ -236,6 +235,69 @@ test('packed package clean-installs, starts all eleven tools and reads PDF, Word
     expect(documents[2]?.content[0]?.text).toContain(
       'Slide 1\nFirst: learning objectives',
     );
+
+    await checkInstalledCommands(
+      join(
+        smokeDirectory,
+        'node_modules',
+        'mcp-server-canvas-lms',
+        'bin',
+        'mcp-server-canvas-lms.js',
+      ),
+    );
+
+    const extensionPath = join(smokeDirectory, 'canvas-preview.mcpb');
+    await execFileAsync(
+      process.execPath,
+      ['scripts/build-mcpb.mjs', extensionPath],
+      { cwd: projectRoot },
+    );
+    const extension = unzipSync(new Uint8Array(await readFile(extensionPath)));
+    const manifest = JSON.parse(strFromU8(extension['manifest.json']!));
+    expect(manifest.user_config.canvas_api_token.sensitive).toBe(true);
+    expect(manifest.compatibility.platforms).toEqual([process.platform]);
+    expect(manifest.server.entry_point).toBe('dist/index.js');
+    expect(extension['dist/index.js']).toBeDefined();
+    expect(
+      extension['node_modules/pdfjs-dist/legacy/build/pdf.mjs'],
+    ).toBeDefined();
+    expect(
+      Object.keys(extension).some((name) =>
+        /^(?:src\/|tests\/|\.env|scripts\/|node_modules\/vitest\/)/.test(name),
+      ),
+    ).toBe(false);
+    const extensionRoot = join(smokeDirectory, 'extension');
+    for (const [name, bytes] of Object.entries(extension)) {
+      const destination = resolve(extensionRoot, name);
+      if (!destination.startsWith(extensionRoot + sep))
+        throw new Error('Unsafe archive path');
+      if (name.endsWith('/')) continue;
+      await mkdir(dirname(destination), { recursive: true });
+      await writeFile(destination, bytes);
+    }
+    const { stdout: extensionOutput } = await execFileAsync(
+      process.execPath,
+      ['--input-type=module', '--eval', documentReaderScript],
+      {
+        cwd: extensionRoot,
+        env: { ...process.env, DOCUMENT_FIXTURES: JSON.stringify(fixtures) },
+      },
+    );
+    const extensionDocuments = JSON.parse(extensionOutput) as Array<{
+      content: Array<{ text: string }>;
+    }>;
+    expect(extensionDocuments[0]?.content[0]?.text).toContain(
+      'Page 1\nPacked PDF content.',
+    );
+    expect(extensionDocuments[1]?.content[0]?.text).toContain(
+      'Paragraph 1\nPacked Word content.',
+    );
+    expect(extensionDocuments[2]?.content[0]?.text).toContain(
+      'Slide 1\nFirst: learning objectives',
+    );
+    await checkInstalledCommands(
+      join(extensionRoot, manifest.server.entry_point),
+    );
   } finally {
     try {
       await client?.close();
@@ -244,4 +306,68 @@ test('packed package clean-installs, starts all eleven tools and reads PDF, Word
       if (tarballPath) await rm(tarballPath, { force: true });
     }
   }
-}, 60_000);
+}, 120_000);
+
+async function checkInstalledCommands(entry: string): Promise<void> {
+  const baseEnv = { ...process.env, CANVAS_BASE_URL: '', CANVAS_API_TOKEN: '' };
+  const help = await execFileAsync(process.execPath, [entry, '--help'], {
+    env: baseEnv,
+  });
+  expect(help.stdout).toContain('--doctor');
+  expect(help.stderr).toBe('');
+  await expect(
+    execFileAsync(process.execPath, [entry, '--doctor', '--json'], {
+      env: baseEnv,
+    }),
+  ).rejects.toMatchObject({
+    code: 1,
+    stdout: expect.stringContaining('CANVAS_BASE_URL'),
+  });
+
+  const requests: Array<{
+    method: string | undefined;
+    url: string | undefined;
+    authorization: string | undefined;
+  }> = [];
+  const server = createServer((request, response) => {
+    requests.push({
+      method: request.method,
+      url: request.url,
+      authorization: request.headers.authorization,
+    });
+    response.setHeader('Content-Type', 'application/json');
+    response.end(JSON.stringify([{ id: 1, name: 'private-course-name' }]));
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const address = server.address();
+    if (!address || typeof address === 'string')
+      throw new Error('Missing test port');
+    const result = await execFileAsync(
+      process.execPath,
+      [entry, '--doctor', '--json'],
+      {
+        env: {
+          ...baseEnv,
+          CANVAS_BASE_URL: `http://127.0.0.1:${address.port}`,
+          CANVAS_API_TOKEN: 'fictional-cli-token',
+        },
+      },
+    );
+    expect(JSON.parse(result.stdout).ok).toBe(true);
+    expect(requests).toEqual([
+      {
+        method: 'GET',
+        url: '/api/v1/courses?enrollment_state=active&per_page=1',
+        authorization: 'Bearer fictional-cli-token',
+      },
+    ]);
+    expect(result.stdout + result.stderr).not.toMatch(
+      /private-course-name|fictional-cli-token/,
+    );
+  } finally {
+    await new Promise<void>((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
+    );
+  }
+}

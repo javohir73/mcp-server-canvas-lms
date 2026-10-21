@@ -33,6 +33,7 @@
   },
   "scripts": {
     "build": "tsup && tsc -p tsconfig.build.json",
+    "build:mcpb": "node scripts/build-mcpb.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src tests && prettier --check .",
     "format": "prettier --write .",
@@ -49,6 +50,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@anthropic-ai/mcpb": "2.1.2",
     "@eslint/js": "^10.0.1",
     "@types/html-to-text": "^9.0.4",
     "@types/node": "^20.19.0",

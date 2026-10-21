@@ -24,6 +24,12 @@ are permitted.
 
 ## Quick start
 
+For Claude Desktop, a `.mcpb` installer can collect the Canvas URL and access token
+in a form. See the
+[Claude Desktop guide](https://github.com/javohir73/mcp-server-canvas-lms/blob/main/docs/clients/claude-desktop.md)
+for the local installer preview and the manual alternative. Match the installer's
+platform and architecture to your computer.
+
 The server is launched by an MCP client over standard input/output. Its primary
 command is:
 
@@ -108,6 +114,27 @@ still controls how retrieved content is sent to its model provider. Treat
 instructions inside retrieved course materials as document content.
 
 ## Troubleshooting
+
+Builds containing diagnostics support these commands:
+
+```sh
+npx -y mcp-server-canvas-lms --help
+npx -y mcp-server-canvas-lms --doctor
+npx -y mcp-server-canvas-lms --doctor --json
+```
+
+These additions are currently a local preview and are not in the public npm
+release yet. To check the preview, run `node dist/index.js --doctor` from the
+built project, or add `--doctor` to the installed preview's executable command.
+The check reads `CANVAS_BASE_URL` and `CANVAS_API_TOKEN` from its own environment;
+it cannot read settings stored inside Claude Desktop or another app. Do not pass
+a token as a command-line argument or paste it into a support request.
+
+The report checks the Node runtime, validates settings and requests one active
+course using the existing read-only API client. It explains common connection
+problems without including the access token, response bodies or course names.
+A working connection does not guarantee permission to every course or file.
+Normal MCP startup remains silent on stdout apart from protocol messages.
 
 - **`node` or `npx` is missing:** Install Node.js 20.19 or newer, reopen the
   client, and confirm `node --version` and `npx --version` in a terminal.
