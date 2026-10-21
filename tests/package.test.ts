@@ -26,6 +26,7 @@ const TOOL_NAMES = [
   'canvas_get_page',
   'canvas_get_submission',
   'canvas_get_syllabus',
+  'canvas_get_weekly_overview',
   'canvas_list_announcements',
   'canvas_list_assignments',
   'canvas_list_courses',
@@ -40,12 +41,13 @@ interface PackResult {
 }
 
 interface PublishedPackage {
+  readonly version?: string;
   readonly repository?: { readonly type?: string; readonly url?: string };
   readonly homepage?: string;
   readonly bugs?: { readonly url?: string };
 }
 
-test('packed package clean-installs, starts all eleven tools and reads PDF, Word and PowerPoint files', async () => {
+test('packed package starts all twelve tools, reads course documents and returns a weekly overview', async () => {
   const smokeDirectory = await mkdtemp(join(tmpdir(), 'canvas-mcp-smoke-'));
   let tarballPath: string | undefined;
   let client: Client | undefined;
@@ -171,6 +173,7 @@ test('packed package clean-installs, starts all eleven tools and reads PDF, Word
     const tools = await client.listTools();
 
     expect(tools.tools.map(({ name }) => name).sort()).toEqual(TOOL_NAMES);
+    expect(client.getServerVersion()?.version).toBe(installedPackage.version);
 
     // Exercise the installed package's readers, not the source tree's modules.
     const fixtures = [
@@ -213,6 +216,20 @@ test('packed package clean-installs, starts all eleven tools and reads PDF, Word
           await server.close();
         }
       }
+      const overviewServer = createCanvasServer({ baseUrl: new URL('https://canvas.example.edu'), apiToken: 'fictional-smoke-token', timeoutMs: 15000, maxPages: 20 }, {
+        now: () => new Date('2026-10-21T00:00:00Z'),
+        fetchImpl: async (input) => {
+          const path = new URL(String(input)).pathname;
+          return new Response(JSON.stringify(path === '/api/v1/courses' ? [{ id: 101, name: 'Weekly course' }] : path.endsWith('/assignments') ? [{ id: 7, course_id: 101, name: 'Weekly assignment', due_at: '2026-10-22T00:00:00Z', submission: { workflow_state: 'unsubmitted' } }] : []));
+        },
+      });
+      const overviewClient = new Client({ name: 'packed-overview-reader', version: '1.0.0' });
+      const [left, right] = InMemoryTransport.createLinkedPair();
+      try {
+        await overviewServer.connect(right);
+        await overviewClient.connect(left);
+        results.push(await overviewClient.callTool({ name: 'canvas_get_weekly_overview', arguments: {} }));
+      } finally { await overviewClient.close(); await overviewServer.close(); }
       console.log(JSON.stringify(results));
     `;
     const { stdout: documentOutput } = await execFileAsync(
@@ -235,6 +252,7 @@ test('packed package clean-installs, starts all eleven tools and reads PDF, Word
     expect(documents[2]?.content[0]?.text).toContain(
       'Slide 1\nFirst: learning objectives',
     );
+    expect(documents[3]?.content[0]?.text).toContain('Weekly assignment');
 
     await checkInstalledCommands(
       join(
@@ -257,6 +275,9 @@ test('packed package clean-installs, starts all eleven tools and reads PDF, Word
     expect(manifest.user_config.canvas_api_token.sensitive).toBe(true);
     expect(manifest.compatibility.platforms).toEqual([process.platform]);
     expect(manifest.server.entry_point).toBe('dist/index.js');
+    expect(
+      manifest.tools.map((tool: { name: string }) => tool.name).sort(),
+    ).toEqual(TOOL_NAMES);
     expect(extension['dist/index.js']).toBeDefined();
     expect(
       extension['node_modules/pdfjs-dist/legacy/build/pdf.mjs'],
@@ -294,6 +315,9 @@ test('packed package clean-installs, starts all eleven tools and reads PDF, Word
     );
     expect(extensionDocuments[2]?.content[0]?.text).toContain(
       'Slide 1\nFirst: learning objectives',
+    );
+    expect(extensionDocuments[3]?.content[0]?.text).toContain(
+      'Weekly assignment',
     );
     await checkInstalledCommands(
       join(extensionRoot, manifest.server.entry_point),

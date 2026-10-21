@@ -20,6 +20,7 @@ import { createAssignmentHandlers } from './tools/assignment-tools.js';
 import { createContentHandlers } from './tools/content-tools.js';
 import { createCourseHandlers } from './tools/course-tools.js';
 import { createFileHandlers } from './tools/file-tools.js';
+import { createOverviewHandler } from './tools/overview-tools.js';
 
 const positiveId = z.number().int().positive();
 const optionalLimit = z.number().int().min(1).max(100).optional();
@@ -70,6 +71,10 @@ export function createCanvasServer(
   const courseHandlers = createCourseHandlers(dependencies);
   const assignmentHandlers = createAssignmentHandlers(dependencies);
   const contentHandlers = createContentHandlers(dependencies);
+  const overviewHandler = createOverviewHandler({
+    ...dependencies,
+    canvasOrigin: config.baseUrl,
+  });
   const fileHandlers = createFileHandlers({
     ...dependencies,
     canvasOrigin: config.baseUrl,
@@ -92,7 +97,7 @@ export function createCanvasServer(
   });
   const server = new McpServer({
     name: 'mcp-server-canvas-lms',
-    version: '0.1.0',
+    version: '0.2.0-preview.1',
   });
   const safe = <Input>(handler: (input: Input) => Promise<CallToolResult>) =>
     safeTool(handler, config.baseUrl.hostname);
@@ -113,6 +118,44 @@ export function createCanvasServer(
     });
   };
 
+  registerTool(
+    'canvas_get_weekly_overview',
+    {
+      description: `${readOnlyPrefix} Get a student weekly overview across active courses: upcoming deadlines, overdue work, completion to verify, undated tasks and recent announcements, with source links and partial-coverage notices. Defaults to the next seven days and past seven days.`,
+      inputSchema: z.strictObject({
+        days_ahead: z.number().int().min(1).max(30).optional(),
+        since_days: z.number().int().min(1).max(30).optional(),
+        limit: z.number().int().min(1).max(50).optional(),
+        timezone: z
+          .string()
+          .trim()
+          .min(1)
+          .max(100)
+          .refine((value) => {
+            try {
+              new Intl.DateTimeFormat('en', { timeZone: value }).format(0);
+              return true;
+            } catch {
+              return false;
+            }
+          })
+          .optional(),
+      }),
+      annotations: readOnlyAnnotations,
+    },
+    safe((input) =>
+      overviewHandler({
+        ...(input.days_ahead === undefined
+          ? {}
+          : { days_ahead: input.days_ahead }),
+        ...(input.since_days === undefined
+          ? {}
+          : { since_days: input.since_days }),
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+        ...(input.timezone === undefined ? {} : { timezone: input.timezone }),
+      }),
+    ),
+  );
   registerTool(
     'canvas_list_courses',
     {

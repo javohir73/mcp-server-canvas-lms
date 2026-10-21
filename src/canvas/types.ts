@@ -27,6 +27,7 @@ export interface CanvasEnrollment {
 }
 
 export interface CanvasAssignment {
+  readonly published?: boolean;
   readonly id: number;
   readonly course_id: number;
   readonly name: string;
@@ -42,6 +43,7 @@ export interface CanvasAssignment {
 }
 
 export interface CanvasSubmission {
+  readonly redo_request?: boolean;
   readonly id?: number;
   readonly workflow_state?: string;
   readonly submitted_at?: string | null;
@@ -59,6 +61,7 @@ export interface CanvasSubmission {
 }
 
 export interface CanvasAnnouncement {
+  readonly published?: boolean;
   readonly id: number;
   readonly title?: string;
   readonly message?: string | null;

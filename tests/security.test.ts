@@ -28,11 +28,12 @@ afterEach(async () => {
 });
 
 describe('read-only MCP security boundary', () => {
-  test('all eleven tools produce GET-only Canvas and file traffic', async () => {
+  test('all twelve tools produce GET-only Canvas and file traffic', async () => {
     const requests: RequestRecord[] = [];
     const { client } = await connectCanvasServer(routingFetch(requests));
     const calls = [
       ['canvas_list_courses', {}],
+      ['canvas_get_weekly_overview', {}],
       ['canvas_list_assignments', { course_id: 1, bucket: 'all', limit: 1 }],
       ['canvas_get_assignment', { course_id: 1, assignment_id: 2 }],
       ['canvas_get_grades', { course_id: 1 }],

@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "mcp-server-canvas-lms",
   "display_name": "Canvas LMS",
-  "version": "0.1.0",
+  "version": "0.2.0-preview.1",
   "description": "Read your Canvas courses, assignments and feedback, with text from PDFs, Word documents and PowerPoint slides.",
   "long_description": "A minimal, student-focused, strictly read-only MCP server for Canvas LMS.\n\nAsk Claude about your courses, upcoming assignments, grades and instructor feedback, announcements, syllabi, modules, pages, and course files, including text from PDF, Word and PowerPoint documents with source references. Every Canvas request is an HTTP GET: this server cannot submit assignments, send messages, change grades, or modify anything in Canvas.\n\nYou need your institution's Canvas URL (for example https://canvas.example.edu) and a Canvas personal access token (Canvas \u2192 Account \u2192 Settings \u2192 Approved Integrations \u2192 New Access Token). The token is stored securely by Claude Desktop and is only ever sent to your Canvas server.",
   "author": {
@@ -54,6 +54,10 @@
     }
   },
   "tools": [
+    {
+      "name": "canvas_get_weekly_overview",
+      "description": "Get upcoming deadlines, overdue work, completion to verify and recent announcements across active courses, with source links and coverage notices."
+    },
     {
       "name": "canvas_list_courses",
       "description": "List active courses, terms, and available current scores."

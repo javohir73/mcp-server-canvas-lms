@@ -12,6 +12,7 @@ const TOOL_NAMES = [
   'canvas_get_page',
   'canvas_get_submission',
   'canvas_get_syllabus',
+  'canvas_get_weekly_overview',
   'canvas_list_announcements',
   'canvas_list_assignments',
   'canvas_list_courses',
@@ -39,7 +40,7 @@ afterEach(async () => {
 });
 
 describe('Canvas MCP tool registration', () => {
-  test('discovers exactly the eleven approved read-only tools', async () => {
+  test('discovers exactly the twelve approved read-only tools', async () => {
     const { client } = await connectCanvasServer();
 
     const result = await client.listTools();
@@ -128,6 +129,32 @@ describe('Canvas MCP tool registration', () => {
     await expectToolError(client, 'canvas_list_courses', {
       arbitrary_path: '/api/v1/users',
     });
+  });
+
+  test('validates overview windows, limits and timezone before fetching data', async () => {
+    let requests = 0;
+    const { client } = await connectCanvasServer(async () => {
+      requests += 1;
+      return new Response('[]');
+    });
+    for (const input of [
+      { days_ahead: 0 },
+      { days_ahead: 31 },
+      { since_days: '7' },
+      { since_days: 31 },
+      { limit: 51 },
+      { timezone: 'not/a/timezone' },
+      { timezone: '' },
+      { user_id: 1 },
+    ]) {
+      await expectToolError(client, 'canvas_get_weekly_overview', input);
+    }
+    expect(requests).toBe(0);
+    await expectToolSuccess(client, 'canvas_get_weekly_overview', {
+      timezone: 'Australia/Sydney',
+      days_ahead: 7,
+    });
+    expect(requests).toBe(1);
   });
 });
 

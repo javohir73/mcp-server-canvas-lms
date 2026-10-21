@@ -56,25 +56,59 @@ or a
 
 ## Tools
 
-The server exposes exactly eleven tools:
+The server exposes twelve read-only tools:
 
-| Tool                        | Reads                                                          |
-| --------------------------- | -------------------------------------------------------------- |
-| `canvas_list_courses`       | Active courses, terms, and current scores                      |
-| `canvas_list_assignments`   | Assignments for one or all active courses                      |
-| `canvas_get_assignment`     | Requirements, rubric, and submission summary                   |
-| `canvas_get_grades`         | Course totals or assignment-level grades                       |
-| `canvas_get_submission`     | The current user's submission, comments, and rubric assessment |
-| `canvas_get_syllabus`       | A course syllabus as cleaned text                              |
-| `canvas_list_announcements` | Recent course announcements                                    |
-| `canvas_list_modules`       | Modules and their items                                        |
-| `canvas_get_page`           | A course page by its Canvas URL slug                           |
-| `canvas_list_files`         | Course files and folders                                       |
-| `canvas_read_file`          | Text from a supported course file                              |
+| Tool                         | Reads                                                                     |
+| ---------------------------- | ------------------------------------------------------------------------- |
+| `canvas_list_courses`        | Active courses, terms, and current scores                                 |
+| `canvas_list_assignments`    | Assignments for one or all active courses                                 |
+| `canvas_get_assignment`      | Requirements, rubric, and submission summary                              |
+| `canvas_get_grades`          | Course totals or assignment-level grades                                  |
+| `canvas_get_submission`      | The current user's submission, comments, and rubric assessment            |
+| `canvas_get_syllabus`        | A course syllabus as cleaned text                                         |
+| `canvas_get_weekly_overview` | Upcoming deadlines, overdue work and recent announcements across subjects |
+| `canvas_list_announcements`  | Recent course announcements                                               |
+| `canvas_list_modules`        | Modules and their items                                                   |
+| `canvas_get_page`            | A course page by its Canvas URL slug                                      |
+| `canvas_list_files`          | Course files and folders                                                  |
+| `canvas_read_file`           | Text from a supported course file                                         |
 
 Every Canvas API request is structurally restricted to HTTP `GET`. There are
 no mutation methods, so this server cannot submit assignments, send messages,
 change grades, edit course content, or perform administrative actions.
+
+## Plan your week across subjects
+
+Ask your assistant:
+
+> What should I focus on this week? Check my upcoming deadlines, overdue work
+> and recent announcements across my subjects. Use Australia/Sydney time and
+> link to Canvas.
+
+`canvas_get_weekly_overview` combines active courses, assignments and recent
+announcements in one on-demand snapshot. It requests Canvas's applicable
+assignment date overrides for the current user. Completed and excused work is
+excluded; work marked missing remains visible even if a zero was recorded.
+Past deadlines with unreported or offline completion are listed separately for
+verification. Work without a usable due date is also identified.
+Work reassigned for resubmission stays visible; an old deadline is flagged for
+verification rather than assumed to be the current resubmission deadline.
+
+The default is the next seven days of deadlines and the previous seven days of
+announcements. Both are rolling 24-hour windows, shown explicitly in the output.
+`days_ahead` and `since_days` each accept 1–30; `limit` accepts 1–50 items per
+section (default 10). An optional IANA `timezone` controls displayed dates;
+otherwise the server's timezone is used. Deadlines at either end of the
+upcoming window are included. Announcement previews are shortened and link to
+their full source.
+
+The tool checks up to 50 active courses, with at most six concurrent API
+requests. It reports denied or unavailable data, skipped courses and omitted
+items. Section counts refer only to checked data. Output is limited to 100,000
+characters with a truncation notice. It does not inspect every brief, check
+external assessment systems, track changes between visits or send reminders.
+
+This tool is included in local preview `0.2.0-preview.1`; the public npm release is unchanged.
 
 ## Read assignment briefs and lecture files
 
