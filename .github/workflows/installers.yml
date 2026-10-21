@@ -11,6 +11,7 @@ jobs:
   build:
     name: Installer ${{ matrix.platform }}
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:

@@ -59,161 +59,165 @@ interface PublishedPackage {
   readonly bugs?: { readonly url?: string };
 }
 
-test('packed package starts all thirteen tools, reads course documents and returns a weekly overview', async () => {
-  const smokeDirectory = await mkdtemp(join(tmpdir(), 'canvas-mcp-smoke-'));
-  let tarballPath: string | undefined;
-  let client: Client | undefined;
+test(
+  'packed package starts all thirteen tools, reads course documents and returns a weekly overview',
+  async () => {
+    const smokeDirectory = await mkdtemp(join(tmpdir(), 'canvas-mcp-smoke-'));
+    let tarballPath: string | undefined;
+    let client: Client | undefined;
 
-  try {
-    progress('Build package');
-    await runNpm('npm', ['run', 'build'], {
-      cwd: projectRoot,
-      env: { ...process.env, npm_config_dry_run: 'false' },
-    });
-
-    const { stdout } = await runNpm(
-      'npm',
-      ['pack', '--json', '--ignore-scripts'],
-      {
+    try {
+      progress('Build package');
+      await runNpm('npm', ['run', 'build'], {
         cwd: projectRoot,
         env: { ...process.env, npm_config_dry_run: 'false' },
-      },
-    );
-    const [packResult] = JSON.parse(stdout) as PackResult[];
-    if (!packResult) throw new Error('npm pack returned no package result');
+      });
 
-    tarballPath = join(projectRoot, packResult.filename);
-    const packedFiles = packResult.files.map(({ path }) => path).sort();
-    const topLevelEntries = [
-      ...new Set(packedFiles.map((path) => path.split('/')[0])),
-    ].sort();
+      const { stdout } = await runNpm(
+        'npm',
+        ['pack', '--json', '--ignore-scripts'],
+        {
+          cwd: projectRoot,
+          env: { ...process.env, npm_config_dry_run: 'false' },
+        },
+      );
+      const [packResult] = JSON.parse(stdout) as PackResult[];
+      if (!packResult) throw new Error('npm pack returned no package result');
 
-    expect(topLevelEntries).toEqual([
-      'LICENSE',
-      'README.md',
-      'bin',
-      'dist',
-      'package.json',
-    ]);
-    expect(packedFiles).toContain('dist/server.d.ts');
-    expect(
-      packedFiles.some((path) =>
-        [
-          'src/',
-          'tests/',
-          '.env',
-          '.github/',
-          'docs/superpowers/',
-          'downloads/',
-        ].some((forbidden) => path.startsWith(forbidden)),
-      ),
-    ).toBe(false);
+      tarballPath = join(projectRoot, packResult.filename);
+      const packedFiles = packResult.files.map(({ path }) => path).sort();
+      const topLevelEntries = [
+        ...new Set(packedFiles.map((path) => path.split('/')[0])),
+      ].sort();
 
-    progress('Install clean npm package');
-    await runNpm(
-      'npm',
-      ['install', '--ignore-scripts', '--no-audit', '--no-fund', tarballPath],
-      {
-        cwd: smokeDirectory,
-        env: { ...process.env, npm_config_dry_run: 'false' },
-      },
-    );
+      expect(topLevelEntries).toEqual([
+        'LICENSE',
+        'README.md',
+        'bin',
+        'dist',
+        'package.json',
+      ]);
+      expect(packedFiles).toContain('dist/server.d.ts');
+      expect(
+        packedFiles.some((path) =>
+          [
+            'src/',
+            'tests/',
+            '.env',
+            '.github/',
+            'docs/superpowers/',
+            'downloads/',
+          ].some((forbidden) => path.startsWith(forbidden)),
+        ),
+      ).toBe(false);
 
-    const installedPackage = JSON.parse(
-      await readFile(
+      progress('Install clean npm package');
+      await runNpm(
+        'npm',
+        ['install', '--ignore-scripts', '--no-audit', '--no-fund', tarballPath],
+        {
+          cwd: smokeDirectory,
+          env: { ...process.env, npm_config_dry_run: 'false' },
+        },
+      );
+
+      const installedPackage = JSON.parse(
+        await readFile(
+          join(
+            smokeDirectory,
+            'node_modules',
+            'mcp-server-canvas-lms',
+            'package.json',
+          ),
+          'utf8',
+        ),
+      ) as PublishedPackage;
+      expect(installedPackage.repository).toEqual({
+        type: 'git',
+        url: 'git+https://github.com/javohir73/mcp-server-canvas-lms.git',
+      });
+      expect(installedPackage.homepage).toBe(
+        'https://github.com/javohir73/mcp-server-canvas-lms#readme',
+      );
+      expect(installedPackage.bugs).toEqual({
+        url: 'https://github.com/javohir73/mcp-server-canvas-lms/issues',
+      });
+
+      const installedReadme = await readFile(
         join(
           smokeDirectory,
           'node_modules',
           'mcp-server-canvas-lms',
-          'package.json',
+          'README.md',
         ),
         'utf8',
-      ),
-    ) as PublishedPackage;
-    expect(installedPackage.repository).toEqual({
-      type: 'git',
-      url: 'git+https://github.com/javohir73/mcp-server-canvas-lms.git',
-    });
-    expect(installedPackage.homepage).toBe(
-      'https://github.com/javohir73/mcp-server-canvas-lms#readme',
-    );
-    expect(installedPackage.bugs).toEqual({
-      url: 'https://github.com/javohir73/mcp-server-canvas-lms/issues',
-    });
-
-    const installedReadme = await readFile(
-      join(
-        smokeDirectory,
-        'node_modules',
-        'mcp-server-canvas-lms',
-        'README.md',
-      ),
-      'utf8',
-    );
-    expect(installedReadme).not.toMatch(/\]\(docs\/clients\//);
-    for (const guide of [
-      'codex.md',
-      'claude-desktop.md',
-      'cursor.md',
-      'vscode.md',
-      'generic.md',
-    ]) {
-      expect(installedReadme).toContain(
-        `https://github.com/javohir73/mcp-server-canvas-lms/blob/main/docs/clients/${guide}`,
       );
-    }
+      expect(installedReadme).not.toMatch(/\]\(docs\/clients\//);
+      for (const guide of [
+        'codex.md',
+        'claude-desktop.md',
+        'cursor.md',
+        'vscode.md',
+        'generic.md',
+      ]) {
+        expect(installedReadme).toContain(
+          `https://github.com/javohir73/mcp-server-canvas-lms/blob/main/docs/clients/${guide}`,
+        );
+      }
 
-    const transport = new StdioClientTransport({
-      command: process.execPath,
-      args: [
-        join(
-          smokeDirectory,
-          'node_modules',
-          'mcp-server-canvas-lms',
-          'bin',
-          'mcp-server-canvas-lms.js',
-        ),
-      ],
-      cwd: smokeDirectory,
-      env: {
-        ...getDefaultEnvironment(),
-        CANVAS_BASE_URL: 'https://canvas.example.edu',
-        CANVAS_API_TOKEN: 'fictional-package-smoke-token',
-      },
-      stderr: 'pipe',
-    });
-    client = new Client({
-      name: 'canvas-package-smoke-test',
-      version: '1.0.0',
-    });
+      const transport = new StdioClientTransport({
+        command: process.execPath,
+        args: [
+          join(
+            smokeDirectory,
+            'node_modules',
+            'mcp-server-canvas-lms',
+            'bin',
+            'mcp-server-canvas-lms.js',
+          ),
+        ],
+        cwd: smokeDirectory,
+        env: {
+          ...getDefaultEnvironment(),
+          CANVAS_BASE_URL: 'https://canvas.example.edu',
+          CANVAS_API_TOKEN: 'fictional-package-smoke-token',
+        },
+        stderr: 'pipe',
+      });
+      client = new Client({
+        name: 'canvas-package-smoke-test',
+        version: '1.0.0',
+      });
 
-    progress('Connect installed stdio server');
-    await client.connect(transport);
-    const tools = await client.listTools();
+      progress('Connect installed stdio server');
+      await client.connect(transport);
+      const tools = await client.listTools();
 
-    expect(tools.tools.map(({ name }) => name).sort()).toEqual(TOOL_NAMES);
-    expect(client.getServerVersion()?.version).toBe(installedPackage.version);
+      expect(tools.tools.map(({ name }) => name).sort()).toEqual(TOOL_NAMES);
+      expect(client.getServerVersion()?.version).toBe(installedPackage.version);
 
-    // Exercise the installed package's readers, not the source tree's modules.
-    const fixtures = [
-      {
-        name: 'brief.pdf',
-        data: Buffer.from(pdfDocument(['Packed PDF content.'])).toString(
-          'base64',
-        ),
-      },
-      {
-        name: 'brief.docx',
-        data: Buffer.from(
-          wordDocument('<w:p><w:r><w:t>Packed Word content.</w:t></w:r></w:p>'),
-        ).toString('base64'),
-      },
-      {
-        name: 'lecture.pptx',
-        data: Buffer.from(presentationDocument()).toString('base64'),
-      },
-    ];
-    const documentReaderScript = `
+      // Exercise the installed package's readers, not the source tree's modules.
+      const fixtures = [
+        {
+          name: 'brief.pdf',
+          data: Buffer.from(pdfDocument(['Packed PDF content.'])).toString(
+            'base64',
+          ),
+        },
+        {
+          name: 'brief.docx',
+          data: Buffer.from(
+            wordDocument(
+              '<w:p><w:r><w:t>Packed Word content.</w:t></w:r></w:p>',
+            ),
+          ).toString('base64'),
+        },
+        {
+          name: 'lecture.pptx',
+          data: Buffer.from(presentationDocument()).toString('base64'),
+        },
+      ];
+      const documentReaderScript = `
       import { createCanvasServer } from 'mcp-server-canvas-lms';
       import { Client } from '@modelcontextprotocol/sdk/client/index.js';
       import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -255,130 +259,142 @@ test('packed package starts all thirteen tools, reads course documents and retur
       } finally { await overviewClient.close(); await overviewServer.close(); }
       console.log(JSON.stringify(results));
     `;
-    progress('Read documents, overview and changes from npm package');
-    const { stdout: documentOutput } = await runNpm(
-      process.execPath,
-      ['--input-type=module', '--eval', documentReaderScript],
-      {
-        cwd: smokeDirectory,
-        env: {
-          ...process.env,
-          CANVAS_STATE_DIR: join(smokeDirectory, 'history'),
-          DOCUMENT_FIXTURES: JSON.stringify(fixtures),
+      progress('Read documents, overview and changes from npm package');
+      const { stdout: documentOutput } = await runNpm(
+        process.execPath,
+        ['--input-type=module', '--eval', documentReaderScript],
+        {
+          cwd: smokeDirectory,
+          env: {
+            ...process.env,
+            CANVAS_STATE_DIR: join(smokeDirectory, 'history'),
+            DOCUMENT_FIXTURES: JSON.stringify(fixtures),
+          },
         },
-      },
-    );
-    const documents = JSON.parse(documentOutput) as Array<{
-      content: Array<{ text: string }>;
-    }>;
-    expect(documents[0]?.content[0]?.text).toContain(
-      'Page 1\nPacked PDF content.',
-    );
-    expect(documents[1]?.content[0]?.text).toContain(
-      'Paragraph 1\nPacked Word content.',
-    );
-    expect(documents[2]?.content[0]?.text).toContain(
-      'Slide 1\nFirst: learning objectives',
-    );
-    expect(documents[3]?.content[0]?.text).toContain('Weekly assignment');
-    expect(documents[4]?.content[0]?.text).toContain('Baseline saved');
-    expect(documents[5]?.content[0]?.text).toContain(
-      'Deadline changed: Weekly assignment',
-    );
+      );
+      const documents = JSON.parse(documentOutput) as Array<{
+        content: Array<{ text: string }>;
+      }>;
+      expect(documents[0]?.content[0]?.text).toContain(
+        'Page 1\nPacked PDF content.',
+      );
+      expect(documents[1]?.content[0]?.text).toContain(
+        'Paragraph 1\nPacked Word content.',
+      );
+      expect(documents[2]?.content[0]?.text).toContain(
+        'Slide 1\nFirst: learning objectives',
+      );
+      expect(documents[3]?.content[0]?.text).toContain('Weekly assignment');
+      expect(documents[4]?.content[0]?.text).toContain('Baseline saved');
+      expect(documents[5]?.content[0]?.text).toContain(
+        'Deadline changed: Weekly assignment',
+      );
 
-    progress('Check installed CLI');
-    await checkInstalledCommands(
-      join(
-        smokeDirectory,
-        'node_modules',
-        'mcp-server-canvas-lms',
-        'bin',
-        'mcp-server-canvas-lms.js',
-      ),
-    );
+      progress('Check installed CLI');
+      await checkInstalledCommands(
+        join(
+          smokeDirectory,
+          'node_modules',
+          'mcp-server-canvas-lms',
+          'bin',
+          'mcp-server-canvas-lms.js',
+        ),
+      );
 
-    progress('Build desktop bundle');
-    const extensionPath = join(smokeDirectory, 'canvas-preview.mcpb');
-    await runNpm(process.execPath, ['scripts/build-mcpb.mjs', extensionPath], {
-      cwd: projectRoot,
-      env: { ...process.env, npm_config_dry_run: 'true' },
-    });
-    expect(await readFile(extensionPath + '.sha256', 'utf8')).toBe(
-      createHash('sha256')
-        .update(await readFile(extensionPath))
-        .digest('hex') + '  canvas-preview.mcpb\n',
-    );
-    const extension = unzipSync(new Uint8Array(await readFile(extensionPath)));
-    const manifest = JSON.parse(strFromU8(extension['manifest.json']!));
-    expect(manifest.user_config.canvas_api_token.sensitive).toBe(true);
-    expect(manifest.compatibility.platforms).toEqual([process.platform]);
-    expect(manifest.server.entry_point).toBe('dist/index.js');
-    expect(
-      manifest.tools.map((tool: { name: string }) => tool.name).sort(),
-    ).toEqual(TOOL_NAMES);
-    expect(extension['dist/index.js']).toBeDefined();
-    expect(
-      extension['node_modules/pdfjs-dist/legacy/build/pdf.mjs'],
-    ).toBeDefined();
-    expect(
-      Object.keys(extension).some((name) =>
-        /^(?:src\/|tests\/|\.env|scripts\/|node_modules\/vitest\/)/.test(name),
-      ),
-    ).toBe(false);
-    const extensionRoot = join(smokeDirectory, 'extension');
-    for (const [name, bytes] of Object.entries(extension)) {
-      const destination = resolve(extensionRoot, name);
-      if (!destination.startsWith(extensionRoot + sep))
-        throw new Error('Unsafe archive path');
-      if (name.endsWith('/')) continue;
-      await mkdir(dirname(destination), { recursive: true });
-      await writeFile(destination, bytes);
-    }
-    progress('Read documents, overview and changes from desktop bundle');
-    const { stdout: extensionOutput } = await runNpm(
-      process.execPath,
-      ['--input-type=module', '--eval', documentReaderScript],
-      {
-        cwd: extensionRoot,
-        env: {
-          ...process.env,
-          CANVAS_STATE_DIR: join(smokeDirectory, 'extension-history'),
-          DOCUMENT_FIXTURES: JSON.stringify(fixtures),
+      progress('Build desktop bundle');
+      const extensionPath = join(smokeDirectory, 'canvas-preview.mcpb');
+      await runNpm(
+        process.execPath,
+        ['scripts/build-mcpb.mjs', extensionPath],
+        {
+          cwd: projectRoot,
+          env: { ...process.env, npm_config_dry_run: 'true' },
         },
-      },
-    );
-    const extensionDocuments = JSON.parse(extensionOutput) as Array<{
-      content: Array<{ text: string }>;
-    }>;
-    expect(extensionDocuments[0]?.content[0]?.text).toContain(
-      'Page 1\nPacked PDF content.',
-    );
-    expect(extensionDocuments[1]?.content[0]?.text).toContain(
-      'Paragraph 1\nPacked Word content.',
-    );
-    expect(extensionDocuments[2]?.content[0]?.text).toContain(
-      'Slide 1\nFirst: learning objectives',
-    );
-    expect(extensionDocuments[3]?.content[0]?.text).toContain(
-      'Weekly assignment',
-    );
-    expect(extensionDocuments[4]?.content[0]?.text).toContain('Baseline saved');
-    expect(extensionDocuments[5]?.content[0]?.text).toContain(
-      'Deadline changed: Weekly assignment',
-    );
-    progress('Check desktop CLI');
-    await checkInstalledCommands(
-      join(extensionRoot, manifest.server.entry_point),
-    );
-  } finally {
-    try {
-      await client?.close();
+      );
+      expect(await readFile(extensionPath + '.sha256', 'utf8')).toBe(
+        createHash('sha256')
+          .update(await readFile(extensionPath))
+          .digest('hex') + '  canvas-preview.mcpb\n',
+      );
+      const extension = unzipSync(
+        new Uint8Array(await readFile(extensionPath)),
+      );
+      const manifest = JSON.parse(strFromU8(extension['manifest.json']!));
+      expect(manifest.user_config.canvas_api_token.sensitive).toBe(true);
+      expect(manifest.compatibility.platforms).toEqual([process.platform]);
+      expect(manifest.server.entry_point).toBe('dist/index.js');
+      expect(
+        manifest.tools.map((tool: { name: string }) => tool.name).sort(),
+      ).toEqual(TOOL_NAMES);
+      expect(extension['dist/index.js']).toBeDefined();
+      expect(
+        extension['node_modules/pdfjs-dist/legacy/build/pdf.mjs'],
+      ).toBeDefined();
+      expect(
+        Object.keys(extension).some((name) =>
+          /^(?:src\/|tests\/|\.env|scripts\/|node_modules\/vitest\/)/.test(
+            name,
+          ),
+        ),
+      ).toBe(false);
+      const extensionRoot = join(smokeDirectory, 'extension');
+      for (const [name, bytes] of Object.entries(extension)) {
+        const destination = resolve(extensionRoot, name);
+        if (!destination.startsWith(extensionRoot + sep))
+          throw new Error('Unsafe archive path');
+        if (name.endsWith('/')) continue;
+        await mkdir(dirname(destination), { recursive: true });
+        await writeFile(destination, bytes);
+      }
+      progress('Read documents, overview and changes from desktop bundle');
+      const { stdout: extensionOutput } = await runNpm(
+        process.execPath,
+        ['--input-type=module', '--eval', documentReaderScript],
+        {
+          cwd: extensionRoot,
+          env: {
+            ...process.env,
+            CANVAS_STATE_DIR: join(smokeDirectory, 'extension-history'),
+            DOCUMENT_FIXTURES: JSON.stringify(fixtures),
+          },
+        },
+      );
+      const extensionDocuments = JSON.parse(extensionOutput) as Array<{
+        content: Array<{ text: string }>;
+      }>;
+      expect(extensionDocuments[0]?.content[0]?.text).toContain(
+        'Page 1\nPacked PDF content.',
+      );
+      expect(extensionDocuments[1]?.content[0]?.text).toContain(
+        'Paragraph 1\nPacked Word content.',
+      );
+      expect(extensionDocuments[2]?.content[0]?.text).toContain(
+        'Slide 1\nFirst: learning objectives',
+      );
+      expect(extensionDocuments[3]?.content[0]?.text).toContain(
+        'Weekly assignment',
+      );
+      expect(extensionDocuments[4]?.content[0]?.text).toContain(
+        'Baseline saved',
+      );
+      expect(extensionDocuments[5]?.content[0]?.text).toContain(
+        'Deadline changed: Weekly assignment',
+      );
+      progress('Check desktop CLI');
+      await checkInstalledCommands(
+        join(extensionRoot, manifest.server.entry_point),
+      );
     } finally {
-      await rm(smokeDirectory, { recursive: true, force: true });
-      if (tarballPath) await rm(tarballPath, { force: true });
+      try {
+        await client?.close();
+      } finally {
+        await rm(smokeDirectory, { recursive: true, force: true });
+        if (tarballPath) await rm(tarballPath, { force: true });
+      }
     }
-  }
-}, 120_000);
+  },
+  process.platform === 'win32' ? 300_000 : 120_000,
+);
 
 async function checkInstalledCommands(entry: string): Promise<void> {
   const baseEnv = { ...process.env, CANVAS_BASE_URL: '', CANVAS_API_TOKEN: '' };

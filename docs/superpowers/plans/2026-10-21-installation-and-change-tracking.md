@@ -91,3 +91,11 @@ automated packaged-server tests from real Claude UI installation.
   builder skipped production dependency installation. Added an explicit inherited
   dry-run regression, observed missing PDF dependency failure locally, then forced
   real subprocess builds. Full suite 249/249 passed after the fix.
+
+- GitHub run 39556481584: full verification green on Node 20.19, 22 and 24.
+  Run 39556481600: all three native installers green, with real PDF/Office,
+  overview, changes and CLI checks inside the packed npm package and bundle.
+- Windows logs explain the first timeout: cold npm install took 45 seconds and
+  bundle build 57 seconds; successful total was 119 seconds against a 120-second
+  cap. Raised only the Windows smoke-test allowance to five minutes and set a
+  15-minute job cap, preserving all assertions. No product-code workaround.
